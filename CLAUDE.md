@@ -31,11 +31,16 @@ It sits between two kinds of sibling:
   `../rtx-spark-cli` cover device setup and health for the boxes themselves.
 
 **Honesty about the current state:** the checked-in code is the mesh-agent
-scaffold (identity, agent-first CLI, skill kit, CI). There is no experiment
-harness, results store, or `experiment` noun in the CLI yet. Anything below
-that describes how experiments *should* flow is guidance for building that
-surface, not a description of code that exists — keep it that way when you
-edit this file (mark unbuilt things `(planned)` or put them under `## Roadmap`).
+scaffold (identity, agent-first CLI, skill kit, CI) plus the lab rulebook
+`docs/lab-conventions.md`. There is no `setup/` tree, no `docs/evidence/`,
+no Dockerfile and no results store yet; the `arm` noun is being built (task
+t3 of the plan under `## Roadmap`) and does not exist in the CLI today.
+Anything below that describes how experiments *should* flow is guidance for
+building that surface, not a description of code that exists — keep it that
+way when you edit this file (mark unbuilt things `(planned)` or put them under
+`## Roadmap`). The converged spec and plan are
+`docs/specs/2026-08-29-edge-arms-across-nvidia-boxes.md` and
+`docs/plans/2026-08-29-edge-arms-across-nvidia-boxes.md`.
 
 ## Identity
 
@@ -159,10 +164,35 @@ test runs in milliseconds.
   at the git root; it ignores `.claude/skills/**` on purpose (vendored,
   verbatim).
 
-## How lab work should flow (planned surface; conventions apply now)
+## Roadmap
 
-The runtime's evidence discipline is the contract this lab exists to feed, so
-adopt it from day one even before there is code for it:
+The plan `docs/plans/2026-08-29-edge-arms-across-nvidia-boxes.md` (converged
+from the spec of the same date) builds the lab surface in dependency waves.
+Status here tracks what is merged on disk; everything not marked **built** is
+`(planned)`:
+
+| Wave | Task | What | Status |
+|------|------|------|--------|
+| 1 | t1 | `docs/lab-conventions.md` — the rulebook (arm path scheme, manifest, evidence naming, shared-box budget, pins, rollback, footprint, secrets/telemetry, hand-off) | **built** |
+| 2 | t2 | Resident rules in `AGENTS.colleague.md`; README why/audiences/state; this Roadmap | **built** |
+| 2 | t3 | `arm` noun: `arm overview`, `arm list`, `arm show` over `setup/**/arm.toml` | (planned) |
+| 3 | t4 | jetson-arena ingest-contract issue, then `arm export --format arena` | (planned) |
+| 3 | t5 | `arm validate` — README sections, Dockerfile provenance header, no secrets | (planned) |
+| 3 | t8 | `lab doctor` checks: resident rules present, no secrets in `setup/`, stdlib-only | (planned) |
+| 4 | t6 | `arm run` — box marker, before/after capture, gateway probe, pinned `uvx sparkrun` launch, transcript skeleton | (planned) |
+| 5 | t7 | Declared Orin Nano 8GB / Orin NX 16GB profiles (DECLARED, UNVALIDATED) + lobes-cli issue | (planned) |
+| 5 | t9 | First Spark arm `setup/spark/qwen3.8-27b-fp8/vllm-mtp/` | (planned) |
+| 5 | t11 | First AGX Orin 64GB arm (jetson-containers-nv sm_87 image, lobes override) | (planned) |
+| 5 | t13 | First Thor arm (lobes override on `Host thor`; sparkrun not used) | (planned) |
+| 6 | t10 | Lab sparkrun registry (`.sparkrun/registry.yaml`) + first arena upload | (planned) |
+| 6 | t12 | Virtual-32GB arm on the Orin 64GB box (capacity-only) | (planned) |
+| 6 | t14 | Orin hand-off: deployment lock → `VARIATION.md` → lobes-cli PR/issue | (planned) |
+
+### How lab work should flow (conventions apply now)
+
+The full rules are in `docs/lab-conventions.md`; the runtime's evidence
+discipline is the contract this lab exists to feed, so it applies from day
+one even before there is code for it:
 
 - **Nothing reads as validated without a transcript.** `lobes-cli` (#108) will
   not let a number appear in a doc, support table, or `lobes capabilities`
@@ -190,9 +220,13 @@ adopt it from day one even before there is code for it:
   or opened as a PR in that checkout. Remember that swapping a served
   checkpoint id 404s every consumer that pins the raw id (the playbook's §2).
 - **Spark-class arms run as sparkrun recipes**; Thor/Orin-class arms run
-  through lobes' own profiles/shapes (`thor`, `orin-small`, …). Keep the arm
-  definition (recipe or shape override) next to its transcript so a result is
-  reproducible without re-deriving flags.
+  through lobes' own profiles/shapes (`thor`, `orin-small`, …) — sparkrun is
+  not used for Thor. Keep the arm definition (recipe or shape override) next
+  to its transcript so a result is reproducible without re-deriving flags.
+- **The boxes are shared with production.** The Spark, Orin and Thor all
+  serve the lobes fleet; an arm declares a shared-box budget or a logged
+  downtime window, binds ports other than 8000/8001, and leaves the gateway
+  `/capabilities` answering when it exits (`docs/lab-conventions.md` §4).
 
 ## Skills (`.claude/skills/`)
 
@@ -261,6 +295,8 @@ edge_ai_lab/              agent-first CLI (cited from teken's python-cli referen
 tests/                    in-process pytest smoke + introspection tests
 .claude/skills/           vendored skill kit (verbatim; see docs/skill-sources.md)
 docs/skill-sources.md     skill provenance ledger + re-sync procedure
+docs/lab-conventions.md   the lab rulebook (arm layout, evidence, shared-box budget, hand-off)
+docs/specs/, docs/plans/  devague spec + plan exports (markdownlint-ignored, generated)
 culture.yaml              mesh identity (suffix + backend + model)
 AGENTS.colleague.md       resident prompt the mesh runtime actually loads
 .github/workflows/        tests.yml (test/lint/version-check) + publish.yml (TestPyPI/PyPI)
