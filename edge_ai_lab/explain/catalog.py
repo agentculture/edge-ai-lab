@@ -20,12 +20,12 @@ buildable/deployable package baseline. Clone it, rename the package, edit
 
 ## Verbs
 
-- `edge-ai-lab whoami` — identity probe from `culture.yaml`.
-- `edge-ai-lab learn` — structured self-teaching prompt.
-- `edge-ai-lab explain <path>` — markdown docs for any noun/verb.
-- `edge-ai-lab overview` — descriptive snapshot of the agent.
-- `edge-ai-lab doctor` — check the agent-identity invariants.
-- `edge-ai-lab cli overview` — describe the CLI surface.
+- `lab whoami` — identity probe from `culture.yaml`.
+- `lab learn` — structured self-teaching prompt.
+- `lab explain <path>` — markdown docs for any noun/verb.
+- `lab overview` — descriptive snapshot of the agent.
+- `lab doctor` — check the agent-identity invariants.
+- `lab cli overview` — describe the CLI surface.
 
 ## Exit-code policy
 
@@ -36,8 +36,8 @@ buildable/deployable package baseline. Clone it, rename the package, edit
 
 ## See also
 
-- `edge-ai-lab explain whoami`
-- `edge-ai-lab explain doctor`
+- `lab explain whoami`
+- `lab explain doctor`
 """
 
 _WHOAMI = """\
@@ -48,8 +48,8 @@ served model, and the package version. Read-only.
 
 ## Usage
 
-    edge-ai-lab whoami
-    edge-ai-lab whoami --json
+    lab whoami
+    lab whoami --json
 """
 
 _LEARN = """\
@@ -60,8 +60,8 @@ exit-code policy, `--json` support, and the `explain` pointer.
 
 ## Usage
 
-    edge-ai-lab learn
-    edge-ai-lab learn --json
+    lab learn
+    lab learn --json
 """
 
 _EXPLAIN = """\
@@ -72,9 +72,9 @@ positional), `explain` is global and addressable by path.
 
 ## Usage
 
-    edge-ai-lab explain edge-ai-lab
-    edge-ai-lab explain whoami
-    edge-ai-lab explain --json <path>
+    lab explain edge-ai-lab
+    lab explain whoami
+    lab explain --json <path>
 """
 
 _OVERVIEW = """\
@@ -86,8 +86,8 @@ ignored `target` so a stray path never hard-fails.
 
 ## Usage
 
-    edge-ai-lab overview
-    edge-ai-lab overview --json
+    lab overview
+    lab overview --json
 """
 
 _DOCTOR = """\
@@ -99,8 +99,8 @@ skills-present check. Exits 1 when unhealthy.
 
 ## Usage
 
-    edge-ai-lab doctor
-    edge-ai-lab doctor --json
+    lab doctor
+    lab doctor --json
 """
 
 _CLI = """\
@@ -111,8 +111,8 @@ itself (distinct from the global `overview`, which describes the agent).
 
 ## Usage
 
-    edge-ai-lab cli overview
-    edge-ai-lab cli overview --json
+    lab cli overview
+    lab cli overview --json
 """
 
 _ARM = """\
@@ -134,15 +134,15 @@ table, `transcripts` (paths under `docs/evidence/`).
 
 ## Usage
 
-    edge-ai-lab arm overview
-    edge-ai-lab arm list [--root PATH] [--json]
-    edge-ai-lab arm show <path> [--json]
+    lab arm overview
+    lab arm list [--root PATH] [--json]
+    lab arm show <path> [--json]
 
 ## See also
 
-    edge-ai-lab explain arm overview
-    edge-ai-lab explain arm list
-    edge-ai-lab explain arm show
+    lab explain arm overview
+    lab explain arm list
+    lab explain arm show
 """
 
 _ARM_OVERVIEW = """\
@@ -152,8 +152,8 @@ Describes the `arm` noun: its verbs and the `arm.toml` manifest schema.
 
 ## Usage
 
-    edge-ai-lab arm overview
-    edge-ai-lab arm overview --json
+    lab arm overview
+    lab arm overview --json
 """
 
 _ARM_LIST = """\
@@ -166,9 +166,9 @@ skipped with a diagnostic on stderr rather than aborting the whole listing.
 
 ## Usage
 
-    edge-ai-lab arm list
-    edge-ai-lab arm list --root /path/to/checkout
-    edge-ai-lab arm list --json
+    lab arm list
+    lab arm list --root /path/to/checkout
+    lab arm list --json
 """
 
 _ARM_SHOW = """\
@@ -181,8 +181,8 @@ raises a structured error (exit 1) naming the problem field.
 
 ## Usage
 
-    edge-ai-lab arm show setup/spark/qwen3.8-27b-fp8/vllm-mtp/
-    edge-ai-lab arm show setup/spark/qwen3.8-27b-fp8/vllm-mtp/arm.toml --json
+    lab arm show setup/spark/qwen3.8-27b-fp8/vllm-mtp/
+    lab arm show setup/spark/qwen3.8-27b-fp8/vllm-mtp/arm.toml --json
 """
 
 _ARM_VALIDATE = """\
@@ -204,9 +204,9 @@ passes, else a structured error naming the first failing check.
 
 ## Usage
 
-    edge-ai-lab arm validate setup/spark/qwen3.8-27b-fp8/vllm-mtp/
-    edge-ai-lab arm validate setup/spark/qwen3.8-27b-fp8/vllm-mtp/arm.toml --json
-    edge-ai-lab arm validate <path> --root /path/to/checkout
+    lab arm validate setup/spark/qwen3.8-27b-fp8/vllm-mtp/
+    lab arm validate setup/spark/qwen3.8-27b-fp8/vllm-mtp/arm.toml --json
+    lab arm validate <path> --root /path/to/checkout
 """
 
 
@@ -223,8 +223,8 @@ anywhere: the lab emits, jetson-arena stores and publishes
 
 ## Usage
 
-    edge-ai-lab arm export setup/spark/qwen3.8-27b-fp8/vllm-mtp/ --format arena
-    edge-ai-lab arm export setup/spark/qwen3.8-27b-fp8/vllm-mtp/ --format arena --json
+    lab arm export setup/spark/qwen3.8-27b-fp8/vllm-mtp/ --format arena
+    lab arm export setup/spark/qwen3.8-27b-fp8/vllm-mtp/ --format arena --json
 """
 
 
@@ -251,9 +251,9 @@ reports the argv/env it would have used.
 
 ## Usage
 
-    edge-ai-lab arm run setup/spark/qwen3.8-27b-fp8/vllm-mtp/
-    edge-ai-lab arm run setup/spark/qwen3.8-27b-fp8/vllm-mtp/ --dry-run --json
-    edge-ai-lab arm run <path> --deploy-dir /var/lib/edge-ai-lab
+    lab arm run setup/spark/qwen3.8-27b-fp8/vllm-mtp/
+    lab arm run setup/spark/qwen3.8-27b-fp8/vllm-mtp/ --dry-run --json
+    lab arm run <path> --deploy-dir /var/lib/edge-ai-lab
 """
 
 
