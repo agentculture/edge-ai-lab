@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-08-29
+
+### Added
+
+- `arm` noun: `arm overview` / `arm list` / `arm show` over `setup/**/arm.toml` (tomllib, stdlib only), `arm validate` (README Rollback/Build footprint/Pins sections, status markers, Dockerfile provenance, no secrets), `arm run` (one-arm-per-box marker, before/after capture, gateway `/capabilities` probe, pinned `uvx sparkrun` launch with telemetry off, transcript skeleton under `docs/evidence/`), and `arm export --format arena` as a refusing stub until jetson-arena#8 records the ingest contract
+- `lab doctor` checks `resident-rules-present`, `no-secrets-in-arms`, `stdlib-only`
+- `docs/lab-conventions.md` — the lab rulebook (arm path scheme, manifest, evidence naming, shared-box budget, pins, rollback, footprint/retention, secrets + telemetry decision, hand-off, sparkrun-via-uvx, lab-never-serves)
+- Declared `DECLARED, UNVALIDATED` arms for Orin Nano 8GB (`setup/orin-nano-8/`) and Orin NX 16GB (`setup/orin-nx-16/`) with lobes profile overrides loader-checked read-only against lobes-cli 0.69.2; card proposal filed as lobes-cli#231
+- devague spec + plan `docs/specs/2026-08-29-edge-arms-across-nvidia-boxes.md`, `docs/plans/…` with the `/scope` → `/think` → `/challenge` provenance
+
+### Changed
+
+- `AGENTS.colleague.md` carries the resident rules (arm path scheme, transcript rule, shared-box budget); README gains why-it-matters, audiences, honest current state; CLAUDE.md gains the `## Roadmap` wave table
+- `.markdownlint-cli2.yaml` ignores devague-generated `docs/specs/**`, `docs/plans/**`, `.devague/**`
+
 ## [0.7.1] - 2026-08-29
 
 ### Changed
