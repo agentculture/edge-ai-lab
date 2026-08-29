@@ -232,28 +232,35 @@ _ARM_RUN = """\
 # edge-ai-lab arm run <path>
 
 Runs one arm on the box it names (`docs/lab-conventions.md` sections 3-5, 8,
-10). Refuses if a box marker (`<deploy-dir>/arm.lock`, default
-`$LAB_DEPLOY_DIR` or `~/.edge-ai-lab`) already names a running arm — the
-`hint:` line names its path. Otherwise: captures a best-effort before
-snapshot (`docker ps`, `docker system df`, `df -h /`, `nvpmodel -q`, GPU
-devfreq, `free -g`, thermals — a missing tool records `unavailable`, never
-fails the run); writes the marker; launches `uvx
+10). Enforces one arm per box with a box-wide lock: `$LAB_BOX_LOCK` if set,
+else `/var/tmp/edge-ai-lab/arm.lock`, else `~/.edge-ai-lab/arm.lock` (the
+fallback is reported as a `warning:` and recorded in the transcript). The
+lock is created atomically; if it already names a running arm the run
+refuses and the `hint:` line names that arm's path; a lock whose pid is
+dead is reported as stale and still refused (never auto-removed). While the
+lock is held the run captures a best-effort before snapshot (`docker ps`,
+`docker system df`, `df -h /`, `nvpmodel -q`, GPU devfreq, `free -g`,
+thermals — a missing tool records `unavailable`), launches `uvx
 sparkrun==<pins.sparkrun_version> run <recipe>` (`SPARKRUN_NO_TELEMETRY=1`)
 for a `sparkrun-recipe` arm or each `[run].commands` entry for a
-`lobes-override` arm; removes the marker in a `finally:` and on `SIGTERM` so
-an abnormal exit still clears it; captures an after snapshot; probes the
-gateway's `GET /capabilities` (a non-200 reply is reported as a warning, not
-a failure); and writes a transcript skeleton under `docs/evidence/` (never
-overwriting — `-2`, `-3`, ...) with empty `## measurements` value lines,
-since a run never fabricates a number. `[run].port` must not be 8000/8001
-(the fleet's own ports). `--dry-run` does everything except the launch and
-reports the argv/env it would have used.
+`lobes-override` arm in its own process group (SIGTERM/SIGINT are forwarded
+to it and awaited), captures the after snapshot, probes the gateway's
+`GET /capabilities` (the HTTP status is recorded; non-200 is a warning), and
+writes the transcript under `docs/evidence/` plus a sidecar directory of the
+same stem holding verbatim copies of `arm.toml`, the driving recipe or
+profile override, and `run.json`; only then is the lock released
+(owner-checked). Transcripts are never overwritten (`-2`, `-3`, ...) and
+their `## measurements` lines stay empty — a run never fabricates a number.
+A launch that exits non-zero still produces the transcript, then `arm run`
+exits 2. `[run].port` must not be 8000/8001 (the fleet's own ports).
+`--deploy-dir` only locates transcript state; it does not affect the lock.
+`--dry-run` does everything except the launch and reports the argv/env.
 
 ## Usage
 
     lab arm run setup/spark/qwen3.8-27b-fp8/vllm-mtp/
     lab arm run setup/spark/qwen3.8-27b-fp8/vllm-mtp/ --dry-run --json
-    lab arm run <path> --deploy-dir /var/lib/edge-ai-lab
+    LAB_BOX_LOCK=/tmp/lab.lock lab arm run <path>   # tests only
 """
 
 
