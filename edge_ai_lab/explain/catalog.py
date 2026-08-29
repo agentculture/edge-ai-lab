@@ -185,6 +185,30 @@ raises a structured error (exit 1) naming the problem field.
     edge-ai-lab arm show setup/spark/qwen3.8-27b-fp8/vllm-mtp/arm.toml --json
 """
 
+_ARM_VALIDATE = """\
+# edge-ai-lab arm validate <path>
+
+Checks an arm against `docs/lab-conventions.md`: the manifest loads
+(`arm.py`'s helpers), the README carries `## Rollback` (a fenced,
+non-placeholder command), `## Build footprint` (measured `Build time:`,
+`Disk delta:`, `Retention:`), and `## Pins` (every manifest `[pins]` key,
+empty pins explained with `empty`/`n/a`); the honesty status marker matches
+`status` (`measured` transcripts exist on disk, `declared-unvalidated` README
+carries `DECLARED, UNVALIDATED`, `virtual-32gb-capacity-only` README and
+manifest carry `capacity-only` and README carries `measured on 64GB
+hardware`); the `Dockerfile` (if present) pins a `FROM ...@sha256:` digest or
+carries a jetson-containers header (commit + `L4T_VERSION`/`CUDA_VERSION`/
+`CUDA_ARCH`); and no secret-like pattern appears under the arm directory.
+Each check reports `{id, passed, message}`; exit 0 only if every check
+passes, else a structured error naming the first failing check.
+
+## Usage
+
+    edge-ai-lab arm validate setup/spark/qwen3.8-27b-fp8/vllm-mtp/
+    edge-ai-lab arm validate setup/spark/qwen3.8-27b-fp8/vllm-mtp/arm.toml --json
+    edge-ai-lab arm validate <path> --root /path/to/checkout
+"""
+
 
 _ARM_EXPORT = """\
 # edge-ai-lab arm export <path> --format arena
@@ -219,5 +243,6 @@ ENTRIES: dict[tuple[str, ...], str] = {
     ("arm", "overview"): _ARM_OVERVIEW,
     ("arm", "list"): _ARM_LIST,
     ("arm", "show"): _ARM_SHOW,
+    ("arm", "validate"): _ARM_VALIDATE,
     ("arm", "export"): _ARM_EXPORT,
 }

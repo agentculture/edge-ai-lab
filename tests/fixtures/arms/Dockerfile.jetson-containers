@@ -1,0 +1,6 @@
+# jetson-containers: commit abcdef1234567 packages vllm:0.13.0
+# L4T_VERSION=36.4.0
+# CUDA_VERSION=12.6
+# CUDA_ARCH=87
+FROM nvcr.io/nvidia/l4t-jetpack:r36.4.0
+RUN echo "build"
