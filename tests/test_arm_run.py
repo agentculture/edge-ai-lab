@@ -182,6 +182,15 @@ def test_deploy_dir_does_not_bypass_the_box_lock(
     assert "already running" in capsys.readouterr().err
 
 
+def _closed_port() -> int:
+    """Return a localhost TCP port that was free a moment ago (nothing listens)."""
+    import socket
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
 # --- (b) launch failure: transcript written, lock cleared, exit 2 -------------
 
 
@@ -191,7 +200,15 @@ def test_launch_failure_clears_lock_writes_transcript_and_exits_2(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    _root, arm_dir = _build_arm(tmp_path, fmt="sparkrun-recipe", recipe="recipe.yaml")
+    # Point the gateway probe at a port nothing listens on so the result does
+    # not depend on whether a real fleet gateway answers on :8001 (it does on
+    # the lab's own Spark, not on CI).
+    _root, arm_dir = _build_arm(
+        tmp_path,
+        fmt="sparkrun-recipe",
+        recipe="recipe.yaml",
+        gateway_url=f"http://127.0.0.1:{_closed_port()}",
+    )
     bin_dir = _make_fake_bin(tmp_path, "uvx", "exit 3")
     monkeypatch.setenv("PATH", str(bin_dir))
 
@@ -202,8 +219,11 @@ def test_launch_failure_clears_lock_writes_transcript_and_exits_2(
     assert payload["launch_exit_code"] == 3
     assert payload["marker_cleared"] is True
     assert not box_lock.exists()
-    # --json still emits exactly one JSON object on stdout; the error goes to stderr
-    assert json.loads(captured.err)["code"] == 2
+    # --json still emits exactly one JSON object on stdout; stderr carries the
+    # gateway-probe warning line(s) followed by exactly one error object.
+    err_lines = [line for line in captured.err.splitlines() if line.strip()]
+    assert all(line.startswith("warning:") for line in err_lines[:-1])
+    assert json.loads(err_lines[-1])["code"] == 2
 
     transcript = Path(payload["transcript"])
     assert transcript.is_file()
