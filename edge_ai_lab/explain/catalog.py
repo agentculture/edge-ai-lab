@@ -228,6 +228,35 @@ anywhere: the lab emits, jetson-arena stores and publishes
 """
 
 
+_ARM_RUN = """\
+# edge-ai-lab arm run <path>
+
+Runs one arm on the box it names (`docs/lab-conventions.md` sections 3-5, 8,
+10). Refuses if a box marker (`<deploy-dir>/arm.lock`, default
+`$LAB_DEPLOY_DIR` or `~/.edge-ai-lab`) already names a running arm — the
+`hint:` line names its path. Otherwise: captures a best-effort before
+snapshot (`docker ps`, `docker system df`, `df -h /`, `nvpmodel -q`, GPU
+devfreq, `free -g`, thermals — a missing tool records `unavailable`, never
+fails the run); writes the marker; launches `uvx
+sparkrun==<pins.sparkrun_version> run <recipe>` (`SPARKRUN_NO_TELEMETRY=1`)
+for a `sparkrun-recipe` arm or each `[run].commands` entry for a
+`lobes-override` arm; removes the marker in a `finally:` and on `SIGTERM` so
+an abnormal exit still clears it; captures an after snapshot; probes the
+gateway's `GET /capabilities` (a non-200 reply is reported as a warning, not
+a failure); and writes a transcript skeleton under `docs/evidence/` (never
+overwriting — `-2`, `-3`, ...) with empty `## measurements` value lines,
+since a run never fabricates a number. `[run].port` must not be 8000/8001
+(the fleet's own ports). `--dry-run` does everything except the launch and
+reports the argv/env it would have used.
+
+## Usage
+
+    edge-ai-lab arm run setup/spark/qwen3.8-27b-fp8/vllm-mtp/
+    edge-ai-lab arm run setup/spark/qwen3.8-27b-fp8/vllm-mtp/ --dry-run --json
+    edge-ai-lab arm run <path> --deploy-dir /var/lib/edge-ai-lab
+"""
+
+
 ENTRIES: dict[tuple[str, ...], str] = {
     (): _ROOT,
     ("edge-ai-lab",): _ROOT,
@@ -245,4 +274,5 @@ ENTRIES: dict[tuple[str, ...], str] = {
     ("arm", "show"): _ARM_SHOW,
     ("arm", "validate"): _ARM_VALIDATE,
     ("arm", "export"): _ARM_EXPORT,
+    ("arm", "run"): _ARM_RUN,
 }
