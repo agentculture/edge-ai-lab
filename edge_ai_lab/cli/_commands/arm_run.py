@@ -1,4 +1,4 @@
-"""``edge-ai-lab arm run <path>`` — the box-side experiment wrapper.
+"""``lab arm run <path>`` — the box-side experiment wrapper.
 
 Runs one arm on the box it names, following ``docs/lab-conventions.md``
 sections 3 (evidence), 4 (shared-box budget), 5 (pins), 8 (telemetry) and 10

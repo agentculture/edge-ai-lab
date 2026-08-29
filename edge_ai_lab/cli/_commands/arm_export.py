@@ -1,4 +1,4 @@
-"""``edge-ai-lab arm export`` — hand an arm's result to a downstream store.
+"""``lab arm export`` — hand an arm's result to a downstream store.
 
 The only downstream today is jetson-arena, and the shape it ingests is **not
 yet agreed**: the proposal lives in :data:`ARENA_CONTRACT_ISSUE`

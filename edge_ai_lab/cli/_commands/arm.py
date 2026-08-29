@@ -1,4 +1,4 @@
-"""``edge-ai-lab arm`` — noun group over experiment arms under ``setup/**/arm.toml``.
+"""``lab arm`` — noun group over experiment arms under ``setup/**/arm.toml``.
 
 An **arm** is one experiment: a hardware class, a model, and one configuration
 of it, addressed by the path ``setup/<device-class>/<model>/<configuration>/``
@@ -294,14 +294,14 @@ def cmd_arm_overview(args: argparse.Namespace) -> None:
     # 0 by default); failures raise CliError. No branch here needs a
     # different exit code, so there is nothing to vary a return value on.
     emit_overview(
-        "edge-ai-lab arm",
+        "lab arm",
         _arm_sections(),
         json_mode=bool(getattr(args, "json", False)),
     )
 
 
 def _no_verb(args: argparse.Namespace) -> None:
-    # `edge-ai-lab arm` with no sub-verb prints the noun's overview.
+    # `lab arm` with no sub-verb prints the noun's overview.
     cmd_arm_overview(args)
 
 
@@ -381,7 +381,7 @@ def cmd_arm_show(args: argparse.Namespace) -> None:
 def register(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "arm",
-        help="Experiment arms under setup/**/arm.toml (see 'edge-ai-lab arm overview').",
+        help="Experiment arms under setup/**/arm.toml (see 'lab arm overview').",
     )
     p.add_argument("--json", action="store_true", help=_JSON_HELP)
     p.set_defaults(func=_no_verb, json=False)

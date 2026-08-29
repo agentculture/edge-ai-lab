@@ -1,4 +1,4 @@
-"""``edge-ai-lab arm validate <path>`` — the arm-directory contract checker.
+"""``lab arm validate <path>`` — the arm-directory contract checker.
 
 Enforces the parts of ``docs/lab-conventions.md`` that ``arm list``/``arm
 show`` do not: the README's required sections (Rollback, Build footprint,
