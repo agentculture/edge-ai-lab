@@ -294,7 +294,7 @@ def cmd_arm_overview(args: argparse.Namespace) -> None:
     # 0 by default); failures raise CliError. No branch here needs a
     # different exit code, so there is nothing to vary a return value on.
     emit_overview(
-        "lab arm",
+        "edge-ai-lab arm",
         _arm_sections(),
         json_mode=bool(getattr(args, "json", False)),
     )
