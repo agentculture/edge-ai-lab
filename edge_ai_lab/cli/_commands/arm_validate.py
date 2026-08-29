@@ -7,14 +7,15 @@ no-secrets rule (§8). This module is a plug-in registered by
 ``edge_ai_lab/cli/_commands/arm.py`` (see that module's docstring for the
 plug-in contract) — it reuses :mod:`edge_ai_lab.cli._commands.arm`'s manifest
 loading/validation instead of re-parsing ``arm.toml`` itself, and reuses
-:mod:`edge_ai_lab.cli._commands.doctor`'s secret-pattern list instead of
+:mod:`edge_ai_lab.cli._commands.doctor`'s streaming secret scanner instead of
 duplicating it.
 
 Each check produces ``{id, passed, message}``. Text mode prints one line per
 check to stdout, then (on any failure) ``error: … / hint: …`` to stderr via
 the normal :class:`~edge_ai_lab.cli._errors.CliError` contract. ``--json``
-emits the check list to stdout the same way on both success and failure. Exit
-0 only when every check passes.
+emits exactly **one** object per run: the check list on stdout when everything
+passes, otherwise a single ``{code, message, remediation, checks}`` error
+object on stderr — never both. Exit 0 only when every check passes.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ import re
 from pathlib import Path
 
 from edge_ai_lab.cli._commands import arm as _arm
-from edge_ai_lab.cli._commands.doctor import _SECRET_PATTERNS
+from edge_ai_lab.cli._commands.doctor import secret_hits
 from edge_ai_lab.cli._errors import EXIT_USER_ERROR, CliError
 from edge_ai_lab.cli._output import emit_result
 
@@ -41,9 +42,14 @@ _CUDA_VERSION_RE = re.compile(r"^#\s*CUDA_VERSION=")
 _CUDA_ARCH_RE = re.compile(r"^#\s*CUDA_ARCH=")
 _DOCKERFILE_SCAN_LINES = 30
 
-_MAX_SCAN_BYTES = 1024 * 1024  # same bound as doctor.py's no-secrets scan
+# A digest-pinned image (§5): `sha256:` plus exactly 64 hex characters.
+_IMAGE_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+
+# How a README's Pins section is allowed to explain an *absent* image digest.
+_EMPTY_DIGEST_WORDS = ("empty", "n/a")
 
 _README_NOT_FOUND = "README.md not found"
+_EVIDENCE_DIR = "docs/evidence"
 
 
 def _pass(check_id: str, message: str) -> dict[str, object]:
@@ -144,6 +150,12 @@ def _check_build_footprint(readme_text: str | None) -> dict[str, object]:
     return _pass(check_id, "Build footprint has measured Build time/Disk delta/Retention")
 
 
+def _explains_emptiness(text: str) -> bool:
+    """Does this README line say *why* a pin is blank rather than leave it blank?"""
+    lowered = text.lower()
+    return any(word in lowered for word in _EMPTY_DIGEST_WORDS)
+
+
 class _PinOutcome:
     """Where one manifest pin landed when checked against the Pins section."""
 
@@ -160,7 +172,7 @@ def _check_one_pin(section: str, key: str, value: object) -> str:
     line = line_match.group(0)
     after = line.split(":", 1)[1].strip() if ":" in line else ""
     if value in ("", None):
-        if "empty" not in after.lower() and "n/a" not in after.lower():
+        if not _explains_emptiness(after):
             return _PinOutcome.UNEXPLAINED_EMPTY
         return _PinOutcome.OK
     if not after or _PLACEHOLDER_RE.search(after):
@@ -197,19 +209,47 @@ def _check_pins(readme_text: str | None, pins: dict[str, object]) -> dict[str, o
     return _pass(check_id, "Pins section lists every manifest pin")
 
 
+def _transcript_problem(root: Path, raw: str) -> str | None:
+    """Why this transcript entry is not a usable piece of evidence, or ``None``.
+
+    Containment is checked **before** existence: an absolute path, a ``..``
+    segment, or a symlink whose target leaves ``docs/evidence/`` would let an
+    arm cite a file the evidence tree does not actually hold (§3), so those are
+    rejected on their shape, not on whether they happen to exist.
+    """
+    candidate = Path(raw)
+    if candidate.is_absolute():
+        return f"{raw} (absolute path; transcripts are relative to the repo root)"
+    if ".." in candidate.parts:
+        return f"{raw} (contains a '..' segment)"
+
+    evidence_root = (root / _EVIDENCE_DIR).resolve()
+    resolved = (root / candidate).resolve()
+    if resolved != evidence_root and evidence_root not in resolved.parents:
+        return f"{raw} (resolves outside {_EVIDENCE_DIR}/)"
+
+    if not resolved.is_file():
+        return f"{raw} (missing)"
+    if resolved.stat().st_size == 0:
+        return f"{raw} (empty)"
+    return None
+
+
 def _check_measured(check_id: str, data: dict[str, object], root: Path) -> dict[str, object]:
     transcripts = data["transcripts"]
     assert isinstance(transcripts, list)
     if not transcripts:
         return _fail(check_id, "status is 'measured' but transcripts is empty")
-    broken = []
-    for rel in transcripts:
-        p = root / str(rel)
-        if not p.is_file() or p.stat().st_size == 0:
-            broken.append(str(rel))
+    broken = [
+        problem
+        for problem in (_transcript_problem(root, str(rel)) for rel in transcripts)
+        if problem is not None
+    ]
     if broken:
-        return _fail(check_id, "transcript path(s) missing or empty: " + ", ".join(broken))
-    return _pass(check_id, "every transcript exists on disk and is non-empty")
+        return _fail(check_id, "unusable transcript path(s): " + "; ".join(broken))
+    return _pass(
+        check_id, f"every transcript is under {_EVIDENCE_DIR}/, exists on disk and is non-empty"
+    )
 
 
 def _check_declared(check_id: str, text: str) -> dict[str, object]:
@@ -247,11 +287,56 @@ def _check_status_marker(
     return _fail(check_id, f"unknown status '{status}'")
 
 
-def _check_dockerfile(arm_dir: Path) -> dict[str, object]:
+def _check_missing_dockerfile(
+    check_id: str, data: dict[str, object], readme_text: str | None
+) -> dict[str, object]:
+    """No Dockerfile on disk — allowed only for a lobes-override arm that says
+    which image it runs (a pinned ``image_digest``) or why it cannot (§5).
+
+    A ``sparkrun-recipe`` arm always builds its own image, so a missing
+    Dockerfile there is an unreproducible arm, not an omission.
+    """
+    fmt = data["format"]
+    if fmt != "lobes-override":
+        return _fail(
+            check_id,
+            f"no Dockerfile, but format is '{fmt}' — a sparkrun-recipe arm must carry "
+            "the Dockerfile for the image its recipe names",
+        )
+
+    pins = data["pins"]
+    assert isinstance(pins, dict)
+    digest = str(pins.get("image_digest", ""))
+    if _IMAGE_DIGEST_RE.match(digest):
+        return _pass(
+            check_id,
+            f"no Dockerfile; lobes-override arm pins image_digest {digest} instead",
+        )
+
+    section = _find_section(readme_text or "", "Pins")
+    digest_line = re.search(r"^.*\bimage_digest\b.*$", section, re.MULTILINE) if section else None
+    if digest_line is not None and _explains_emptiness(digest_line.group(0)):
+        return _pass(
+            check_id,
+            "no Dockerfile; lobes-override arm whose README Pins section explains the "
+            "empty image_digest",
+        )
+
+    return _fail(
+        check_id,
+        "no Dockerfile and no provenance for the image: a lobes-override arm must pin "
+        "pins.image_digest to sha256:<64 hex> or explain in its README Pins section why "
+        "image_digest is empty",
+    )
+
+
+def _check_dockerfile(
+    arm_dir: Path, data: dict[str, object], readme_text: str | None
+) -> dict[str, object]:
     check_id = "dockerfile-provenance"
     dockerfile = arm_dir / "Dockerfile"
     if not dockerfile.is_file():
-        return _pass(check_id, "no Dockerfile (lobes-override arm)")
+        return _check_missing_dockerfile(check_id, data, readme_text)
 
     try:
         lines = dockerfile.read_text(encoding="utf-8").splitlines()[:_DOCKERFILE_SCAN_LINES]
@@ -278,20 +363,10 @@ def _check_dockerfile(arm_dir: Path) -> dict[str, object]:
 
 def _check_no_secrets(arm_dir: Path) -> dict[str, object]:
     check_id = "no-secrets"
-    hits: list[str] = []
-    for path in sorted(arm_dir.rglob("*")):
-        if not path.is_file():
-            continue
-        try:
-            if path.stat().st_size > _MAX_SCAN_BYTES:
-                continue
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        rel = path.relative_to(arm_dir)
-        for lineno, line in enumerate(text.splitlines(), start=1):
-            if any(pattern.search(line) for pattern in _SECRET_PATTERNS):
-                hits.append(f"{rel}:{lineno}")
+    # Same streaming, fail-closed scanner `lab doctor` runs over setup/: every
+    # byte of every file, whatever its size or encoding, and an unreadable file
+    # is a failure rather than a silent skip.
+    hits = secret_hits(arm_dir, arm_dir)
     if hits:
         return _fail(check_id, "secret-like pattern(s): " + ", ".join(hits))
     return _pass(check_id, "no secret-like patterns under the arm directory")
@@ -301,22 +376,34 @@ def _check_no_secrets(arm_dir: Path) -> dict[str, object]:
 
 
 def _finish(checks: list[dict[str, object]], json_mode: bool) -> int:
-    if json_mode:
-        emit_result(checks, json_mode=True)
-    else:
+    """Emit the check list, then raise if anything failed.
+
+    JSON mode emits **one** object either way: the check list on stdout when
+    every check passes, or a single ``{code, message, remediation, checks}``
+    error object on stderr when one does not. Printing the list *and* the error
+    in JSON mode would hand an agent two payloads on two streams for one run.
+    Text mode keeps printing one line per check to stdout before the error,
+    because a human reads the passing lines as context.
+    """
+    failing = [c for c in checks if not c["passed"]]
+
+    if not json_mode:
         lines = [f"{'pass' if c['passed'] else 'FAIL'} {c['id']}: {c['message']}" for c in checks]
         emit_result("\n".join(lines), json_mode=False)
+    elif not failing:
+        emit_result(checks, json_mode=True)
 
-    failing = [c for c in checks if not c["passed"]]
     if failing:
         first = failing[0]
+        failing_ids = ", ".join(str(c["id"]) for c in failing)
         raise CliError(
             code=EXIT_USER_ERROR,
-            message=f"{first['id']}: {first['message']}",
+            message=f"arm validate failed: {failing_ids}",
             remediation=(
-                "fix the failing check reported by `lab arm validate` and re-run it "
-                "(see docs/lab-conventions.md)"
+                f"{first['id']}: {first['message']} — fix it and re-run "
+                "`lab arm validate` (see docs/lab-conventions.md)"
             ),
+            details={"checks": checks},
         )
     return 0
 
@@ -348,7 +435,7 @@ def cmd_arm_validate(args: argparse.Namespace) -> int:
     root = Path(root_arg).resolve() if root_arg else _find_repo_root(arm_dir)
     checks.append(_check_status_marker(data, readme_text, root))
 
-    checks.append(_check_dockerfile(arm_dir))
+    checks.append(_check_dockerfile(arm_dir, data, readme_text))
     checks.append(_check_no_secrets(arm_dir))
 
     return _finish(checks, json_mode)

@@ -69,7 +69,18 @@ _SECRET_PATTERNS = (
     re.compile(r"\b(10|192\.168|172\.(1[6-9]|2\d|3[01]))\.\d+\.\d+"),
 )
 
-_MAX_SCAN_BYTES = 1024 * 1024  # skip files > 1 MiB — keep the scan bounded.
+# The same patterns compiled against bytes, so the scan never has to decode a
+# file first: a latin-1 recipe or a 4 GB blob is scanned exactly like a UTF-8
+# one. `re.UNICODE` is implicit on str patterns and illegal on bytes patterns,
+# so it is masked off; the inline `(?i)` in the source pattern survives.
+_SECRET_PATTERNS_BYTES = tuple(
+    re.compile(p.pattern.encode("utf-8"), p.flags & ~re.UNICODE) for p in _SECRET_PATTERNS
+)
+
+# Streaming scan geometry. The longest pattern above matches well under 200
+# bytes, so a 256-byte overlap between chunks cannot split a match.
+_CHUNK_BYTES = 64 * 1024
+_OVERLAP_BYTES = 256
 
 _YAML_IMPORT_RE = re.compile(r"^\s*(import|from)\s+yaml\b")
 
@@ -138,29 +149,73 @@ def _check_resident_rules(root: Path | None = None) -> dict[str, object]:
     }
 
 
-def _iter_scannable_files(directory: Path):
-    """Yield ``(path, text)`` for regular files under ``directory``, skipping
-    anything over ``_MAX_SCAN_BYTES`` or that fails to decode as UTF-8 (i.e.
-    binaries)."""
+def _match_location(buf: bytes, start: int, lines_before: int, base_offset: int) -> str:
+    """Where a match at ``start`` in ``buf`` is, as a 1-based line number.
+
+    Falls back to ``@<byte offset>`` for a buffer with no newline at all (a
+    binary blob), where a line number would be a meaningless "1".
+    """
+    newlines = lines_before + buf.count(b"\n", 0, start)
+    if newlines or b"\n" in buf:
+        return str(newlines + 1)
+    return f"@{base_offset + start}"
+
+
+def _scan_stream(fh) -> list[str]:
+    """Locations of every secret-like match in an open binary stream.
+
+    Reads in ``_CHUNK_BYTES`` chunks, carrying ``_OVERLAP_BYTES`` forward so a
+    pattern straddling a chunk boundary is still matched. Matches are keyed by
+    absolute byte offset, so the overlap never double-reports one.
+    """
+    found: dict[int, str] = {}
+    tail = b""
+    base = 0  # absolute offset of tail[0]
+    lines_before = 0  # newlines strictly before `base`
+    while True:
+        chunk = fh.read(_CHUNK_BYTES)
+        if not chunk:
+            break
+        buf = tail + chunk
+        for pattern in _SECRET_PATTERNS_BYTES:
+            for match in pattern.finditer(buf):
+                found.setdefault(
+                    base + match.start(),
+                    _match_location(buf, match.start(), lines_before, base),
+                )
+        consumed = max(0, len(buf) - _OVERLAP_BYTES)
+        lines_before += buf.count(b"\n", 0, consumed)
+        base += consumed
+        tail = buf[consumed:]
+    return [found[offset] for offset in sorted(found)]
+
+
+def scan_file_for_secrets(path: Path) -> tuple[list[str], str | None]:
+    """``(locations, error)`` for one file — never both non-empty.
+
+    Fails **closed**: a file that cannot be read is reported as an error
+    rather than skipped, because "unscannable" is not evidence of "clean".
+    """
+    try:
+        with path.open("rb") as fh:
+            return _scan_stream(fh), None
+    except OSError as exc:
+        return [], str(exc)
+
+
+def secret_hits(directory: Path, relative_to: Path) -> list[str]:
+    """Every ``<rel>:<location>`` hit (and unscannable file) under ``directory``."""
+    hits: list[str] = []
     for path in sorted(directory.rglob("*")):
         if not path.is_file():
             continue
-        try:
-            if path.stat().st_size > _MAX_SCAN_BYTES:
-                continue
-            text = path.read_bytes().decode("utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue  # skip binaries / unreadable files
-        yield path, text
-
-
-def _secret_pattern_lines(text: str) -> list[int]:
-    """1-based line numbers in ``text`` that match a secret-like pattern."""
-    return [
-        lineno
-        for lineno, line in enumerate(text.splitlines(), start=1)
-        if any(pattern.search(line) for pattern in _SECRET_PATTERNS)
-    ]
+        locations, error = scan_file_for_secrets(path)
+        rel = path.relative_to(relative_to)
+        if error is not None:
+            hits.append(f"could not scan {rel}: {error}")
+            continue
+        hits.extend(f"{rel}:{location}" for location in locations)
+    return hits
 
 
 def _check_no_secrets(root: Path | None = None) -> dict[str, object]:
@@ -180,12 +235,7 @@ def _check_no_secrets(root: Path | None = None) -> dict[str, object]:
             "remediation": "",
         }
 
-    hits = [
-        f"{path.relative_to(root)}:{lineno}"
-        for path, text in _iter_scannable_files(setup_dir)
-        for lineno in _secret_pattern_lines(text)
-    ]
-
+    hits = secret_hits(setup_dir, root)
     passed = not hits
     return {
         "id": "no-secrets-in-arms",

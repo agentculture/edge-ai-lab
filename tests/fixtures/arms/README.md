@@ -1,4 +1,4 @@
-# spark / model / cfg (fixture arm)
+# spark / model / vllm-mtp (fixture arm)
 
 Test fixture arm used by `tests/test_arm_validate.py`. Carries the literal
 marker DECLARED, UNVALIDATED until a transcript lands.

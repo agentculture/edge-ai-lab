@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import re
 import tomllib
 from pathlib import Path
 
@@ -42,9 +43,23 @@ _VERB_MODULES = ("arm_validate", "arm_run", "arm_export")
 # Shared across every `--json` flag registered in this module (S1192).
 _JSON_HELP = "Emit structured JSON."
 
-# The `arm.toml` schema (docs/lab-conventions.md section 2).
+# The `arm.toml` schema (docs/lab-conventions.md sections 1 and 2). Every
+# vocabulary below is *closed*: a value outside it needs a rulebook edit (and,
+# for `engine`, a lobes-cli issue first) rather than a manifest that quietly
+# means something the CLI cannot act on.
 _FORMATS = {"sparkrun-recipe", "lobes-override"}
 _STATUSES = {"measured", "declared-unvalidated", "virtual-32gb-capacity-only"}
+_DEVICE_CLASSES = {
+    "spark",
+    "thor",
+    "orin-agx-64",
+    "orin-agx-32-virtual",
+    "orin-nx-16",
+    "orin-nano-8",
+}
+_ENGINES = {"vllm", "llama.cpp", "sglang"}
+_BOXES = {"spark", "thor", "orin", "nano", "nx"}
+
 _REQUIRED_FIELDS = (
     "device_class",
     "model",
@@ -56,6 +71,34 @@ _REQUIRED_FIELDS = (
     "pins",
     "transcripts",
 )
+
+# Fields that must be plain TOML strings.
+_STRING_FIELDS = (
+    "device_class",
+    "model",
+    "configuration",
+    "format",
+    "engine",
+    "box",
+    "status",
+)
+
+# Checked in this order so the narrower `format`/`status` errors keep naming
+# themselves first, as they did before the vocabularies were closed.
+_ENUM_FIELDS: tuple[tuple[str, set[str]], ...] = (
+    ("format", _FORMATS),
+    ("status", _STATUSES),
+    ("device_class", _DEVICE_CLASSES),
+    ("engine", _ENGINES),
+    ("box", _BOXES),
+)
+
+# The `<model>` path segment is a lowercase slug (the model id itself is a
+# Hugging Face id with a `/` and mixed case, so it is never compared to it).
+_SLUG_RE = re.compile(r"^[a-z0-9.-]+$")
+
+_SCHEMA_DOC = "docs/lab-conventions.md section 2"
+_PATH_SCHEME_DOC = "docs/lab-conventions.md section 1"
 
 _ARM_VERBS = [
     "arm overview — describe the arm noun (this command)",
@@ -92,8 +135,16 @@ def find_manifests(root: Path) -> list[Path]:
     return sorted(setup_dir.glob("**/arm.toml"))
 
 
-def load_manifest(manifest_path: Path) -> dict[str, object]:
-    """Parse and validate one ``arm.toml``. Raises :class:`CliError` on any problem."""
+def _manifest_error(manifest_path: Path, message: str, remediation: str) -> CliError:
+    """One CliError shape for every manifest problem: ``<path>: <what>``."""
+    return CliError(
+        code=EXIT_USER_ERROR,
+        message=f"{manifest_path}: {message}",
+        remediation=remediation,
+    )
+
+
+def _parse_toml(manifest_path: Path) -> dict[str, object]:
     if not manifest_path.is_file():
         raise CliError(
             code=EXIT_USER_ERROR,
@@ -102,55 +153,116 @@ def load_manifest(manifest_path: Path) -> dict[str, object]:
         )
     try:
         with manifest_path.open("rb") as fh:
-            data = tomllib.load(fh)
+            return tomllib.load(fh)
     except tomllib.TOMLDecodeError as err:
-        raise CliError(
-            code=EXIT_USER_ERROR,
-            message=f"{manifest_path}: invalid TOML ({err})",
-            remediation="fix the TOML syntax and retry",
+        raise _manifest_error(
+            manifest_path, f"invalid TOML ({err})", "fix the TOML syntax and retry"
         ) from err
 
+
+def _check_required(manifest_path: Path, data: dict[str, object]) -> None:
     for field in _REQUIRED_FIELDS:
         if field not in data:
-            raise CliError(
-                code=EXIT_USER_ERROR,
-                message=f"{manifest_path}: missing required field '{field}'",
-                remediation=(
-                    f"add '{field}' to {manifest_path} "
-                    "(see docs/lab-conventions.md section 2 for the manifest schema)"
-                ),
+            raise _manifest_error(
+                manifest_path,
+                f"missing required field '{field}'",
+                f"add '{field}' to {manifest_path} (see {_SCHEMA_DOC} for the manifest schema)",
             )
 
-    fmt = data["format"]
-    if fmt not in _FORMATS:
-        raise CliError(
-            code=EXIT_USER_ERROR,
-            message=f"{manifest_path}: invalid format '{fmt}'",
-            remediation=f"format must be one of: {', '.join(sorted(_FORMATS))}",
+
+def _check_scalar_types(manifest_path: Path, data: dict[str, object]) -> None:
+    """String fields are strings, ``transcripts`` a list of strings, ``pins`` a
+    table of strings — so no consumer has to defend against a TOML integer."""
+    for field in _STRING_FIELDS:
+        if not isinstance(data[field], str):
+            raise _manifest_error(
+                manifest_path,
+                f"'{field}' must be a string, not {type(data[field]).__name__}",
+                f"quote the value of '{field}' (see {_SCHEMA_DOC})",
+            )
+
+    pins = data["pins"]
+    if not isinstance(pins, dict):
+        raise _manifest_error(
+            manifest_path, "'pins' must be a table", f"add a [pins] table (see {_SCHEMA_DOC})"
+        )
+    for key, value in pins.items():
+        if not isinstance(value, str):
+            raise _manifest_error(
+                manifest_path,
+                f"pin '{key}' must be a string, not {type(value).__name__}",
+                f"quote every value in the [pins] table (see {_SCHEMA_DOC})",
+            )
+
+    transcripts = data["transcripts"]
+    if not isinstance(transcripts, list):
+        raise _manifest_error(
+            manifest_path,
+            "'transcripts' must be a list",
+            "set transcripts = [] or a list of docs/evidence/ paths",
+        )
+    for entry in transcripts:
+        if not isinstance(entry, str):
+            raise _manifest_error(
+                manifest_path,
+                f"transcript entries must be strings, not {type(entry).__name__}",
+                "list transcripts as quoted docs/evidence/ paths",
+            )
+
+
+def _check_vocabularies(manifest_path: Path, data: dict[str, object]) -> None:
+    for field, allowed in _ENUM_FIELDS:
+        value = data[field]
+        if value not in allowed:
+            raise _manifest_error(
+                manifest_path,
+                f"invalid {field} '{value}'",
+                f"{field} must be one of: {', '.join(sorted(allowed))}",
+            )
+
+
+def _check_path_identity(manifest_path: Path, data: dict[str, object]) -> None:
+    """``setup/<a>/<b>/<c>/arm.toml`` must agree with the manifest it holds.
+
+    ``<a>`` is the device class and ``<c>`` the configuration; ``<b>`` is only
+    required to be a lowercase slug — the ``model`` field is a Hugging Face id
+    (``Org/Name``), so it is deliberately *not* compared to the segment.
+    Manifests outside a ``setup/`` tree (ad-hoc paths, wheel installs) are
+    skipped: there is no path scheme to check them against.
+    """
+    arm_dir = manifest_path.resolve().parent
+    model_dir = arm_dir.parent
+    device_dir = model_dir.parent
+    if device_dir.parent.name != "setup":
+        return
+
+    expectations = (
+        ("device_class", data["device_class"], device_dir.name),
+        ("configuration", data["configuration"], arm_dir.name),
+    )
+    for field, value, segment in expectations:
+        if value != segment:
+            raise _manifest_error(
+                manifest_path,
+                f"'{field}' is '{value}' but its path segment is '{segment}'",
+                f"rename the directory or the field so they agree (see {_PATH_SCHEME_DOC})",
+            )
+
+    if not _SLUG_RE.match(model_dir.name):
+        raise _manifest_error(
+            manifest_path,
+            f"model path segment '{model_dir.name}' is not a lowercase slug",
+            f"use only [a-z0-9.-] in the <model> path segment (see {_PATH_SCHEME_DOC})",
         )
 
-    status = data["status"]
-    if status not in _STATUSES:
-        raise CliError(
-            code=EXIT_USER_ERROR,
-            message=f"{manifest_path}: invalid status '{status}'",
-            remediation=f"status must be one of: {', '.join(sorted(_STATUSES))}",
-        )
 
-    if not isinstance(data["pins"], dict):
-        raise CliError(
-            code=EXIT_USER_ERROR,
-            message=f"{manifest_path}: 'pins' must be a table",
-            remediation="add a [pins] table (see docs/lab-conventions.md section 2)",
-        )
-
-    if not isinstance(data["transcripts"], list):
-        raise CliError(
-            code=EXIT_USER_ERROR,
-            message=f"{manifest_path}: 'transcripts' must be a list",
-            remediation="set transcripts = [] or a list of docs/evidence/ paths",
-        )
-
+def load_manifest(manifest_path: Path) -> dict[str, object]:
+    """Parse and validate one ``arm.toml``. Raises :class:`CliError` on any problem."""
+    data = _parse_toml(manifest_path)
+    _check_required(manifest_path, data)
+    _check_scalar_types(manifest_path, data)
+    _check_vocabularies(manifest_path, data)
+    _check_path_identity(manifest_path, data)
     return data
 
 
@@ -163,7 +275,11 @@ def _arm_sections() -> list[dict[str, object]]:
                 f"required fields: {', '.join(_REQUIRED_FIELDS)}",
                 f"format: {', '.join(sorted(_FORMATS))}",
                 f"status: {', '.join(sorted(_STATUSES))}",
-                "path scheme: setup/<device-class>/<model>/<configuration>/",
+                f"device_class: {', '.join(sorted(_DEVICE_CLASSES))}",
+                f"engine: {', '.join(sorted(_ENGINES))}",
+                f"box: {', '.join(sorted(_BOXES))}",
+                "path scheme: setup/<device-class>/<model>/<configuration>/ — "
+                "device_class and configuration must equal their path segments",
             ],
         },
         {
