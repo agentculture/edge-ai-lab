@@ -70,7 +70,7 @@ uv sync                                   # dev env (Python >=3.12; runtime deps
 
 # CLI — the console script is `lab` (pyproject [project.scripts]), NOT `edge-ai-lab`.
 uv run lab whoami                         # identity from culture.yaml (add --json anywhere)
-uv run lab learn | explain <path> | overview | doctor | cli overview
+uv run lab learn                          # other verbs: explain <path>, overview, doctor, cli overview
 uv run python -m edge_ai_lab whoami       # equivalent
 
 # Tests
@@ -90,10 +90,10 @@ uv run teken cli doctor . --strict        # agent-first rubric gate
 # Version (required on every PR — the version-check CI job blocks merge otherwise)
 python3 .claude/skills/version-bump/scripts/bump.py show
 echo '{"added":["..."],"changed":["..."],"fixed":["..."]}' \
-  | python3 .claude/skills/version-bump/scripts/bump.py patch|minor|major
+  | python3 .claude/skills/version-bump/scripts/bump.py patch   # exactly one of: patch, minor, major
 
 # PR lifecycle (cicd skill → devex pr + SonarCloud gate)
-bash .claude/skills/cicd/scripts/workflow.sh lint|open|read|reply|delta|status|await
+bash .claude/skills/cicd/scripts/workflow.sh help   # verbs: lint, open, read, reply, delta, status, await
 ```
 
 The `prog` string, `learn` text, README, and test assertions all say
@@ -150,9 +150,11 @@ test runs in milliseconds.
   a red gate fail the job), `lint` (black/isort/flake8/bandit/markdownlint +
   `teken cli doctor --strict`), and `version-check` (PR-only; fails if
   `pyproject.toml` version equals `origin/main`'s and leaves a marker comment).
-- `publish.yml`: PRs touching `pyproject.toml` or `edge_ai_lab/**` publish a
-  `.dev<run>` build to TestPyPI; push to `main` publishes to PyPI via Trusted
-  Publishing (needs the `pypi`/`testpypi` GitHub environments configured).
+- `publish.yml`: **same-repo** PRs touching `pyproject.toml` or
+  `edge_ai_lab/**` publish a `.dev<run>` build to TestPyPI (fork PRs skip
+  `test-publish` — no OIDC/environment context); push to `main` publishes to
+  PyPI via Trusted Publishing (needs the `pypi`/`testpypi` GitHub environments
+  configured).
 - `.markdownlint-cli2.yaml` is repo-local because markdownlint stops walking
   at the git root; it ignores `.claude/skills/**` on purpose (vendored,
   verbatim).

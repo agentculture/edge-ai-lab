@@ -64,7 +64,7 @@ error, `3+` reserved.
 ## Contributing
 
 Every PR bumps the version (`python3 .claude/skills/version-bump/scripts/bump.py
-patch|minor|major`; CI blocks merge otherwise) and goes through the `cicd`
+<patch|minor|major>` — one bump type per run; CI blocks merge otherwise) and goes through the `cicd`
 skill (`devex pr` + SonarCloud gate). Lint is black / isort / flake8 (line
 length 100) / bandit / markdownlint plus `teken cli doctor . --strict`. Full
 conventions — worktree placement, memory discipline, the `ask-colleague`
