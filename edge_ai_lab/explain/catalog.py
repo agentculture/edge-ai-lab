@@ -20,12 +20,12 @@ buildable/deployable package baseline. Clone it, rename the package, edit
 
 ## Verbs
 
-- `edge-ai-lab whoami` — identity probe from `culture.yaml`.
-- `edge-ai-lab learn` — structured self-teaching prompt.
-- `edge-ai-lab explain <path>` — markdown docs for any noun/verb.
-- `edge-ai-lab overview` — descriptive snapshot of the agent.
-- `edge-ai-lab doctor` — check the agent-identity invariants.
-- `edge-ai-lab cli overview` — describe the CLI surface.
+- `lab whoami` — identity probe from `culture.yaml`.
+- `lab learn` — structured self-teaching prompt.
+- `lab explain <path>` — markdown docs for any noun/verb.
+- `lab overview` — descriptive snapshot of the agent.
+- `lab doctor` — check the agent-identity invariants.
+- `lab cli overview` — describe the CLI surface.
 
 ## Exit-code policy
 
@@ -36,8 +36,8 @@ buildable/deployable package baseline. Clone it, rename the package, edit
 
 ## See also
 
-- `edge-ai-lab explain whoami`
-- `edge-ai-lab explain doctor`
+- `lab explain whoami`
+- `lab explain doctor`
 """
 
 _WHOAMI = """\
@@ -48,8 +48,8 @@ served model, and the package version. Read-only.
 
 ## Usage
 
-    edge-ai-lab whoami
-    edge-ai-lab whoami --json
+    lab whoami
+    lab whoami --json
 """
 
 _LEARN = """\
@@ -60,8 +60,8 @@ exit-code policy, `--json` support, and the `explain` pointer.
 
 ## Usage
 
-    edge-ai-lab learn
-    edge-ai-lab learn --json
+    lab learn
+    lab learn --json
 """
 
 _EXPLAIN = """\
@@ -72,9 +72,9 @@ positional), `explain` is global and addressable by path.
 
 ## Usage
 
-    edge-ai-lab explain edge-ai-lab
-    edge-ai-lab explain whoami
-    edge-ai-lab explain --json <path>
+    lab explain edge-ai-lab
+    lab explain whoami
+    lab explain --json <path>
 """
 
 _OVERVIEW = """\
@@ -86,8 +86,8 @@ ignored `target` so a stray path never hard-fails.
 
 ## Usage
 
-    edge-ai-lab overview
-    edge-ai-lab overview --json
+    lab overview
+    lab overview --json
 """
 
 _DOCTOR = """\
@@ -99,8 +99,8 @@ skills-present check. Exits 1 when unhealthy.
 
 ## Usage
 
-    edge-ai-lab doctor
-    edge-ai-lab doctor --json
+    lab doctor
+    lab doctor --json
 """
 
 _CLI = """\
@@ -111,8 +111,156 @@ itself (distinct from the global `overview`, which describes the agent).
 
 ## Usage
 
-    edge-ai-lab cli overview
-    edge-ai-lab cli overview --json
+    lab cli overview
+    lab cli overview --json
+"""
+
+_ARM = """\
+# edge-ai-lab arm
+
+Noun group for **arms** — experiment directories at
+`setup/<device-class>/<model>/<configuration>/`, each described by an
+`arm.toml` manifest (parsed with the standard library's `tomllib`; see
+`docs/lab-conventions.md` section 2 for the full schema). Read-only today:
+`list` and `show`. Later verbs (`validate`, `run`, `export`) land as their own
+`arm_<verb>.py` modules.
+
+## Manifest fields
+
+`device_class`, `model`, `configuration`, `format`
+(`sparkrun-recipe`|`lobes-override`), `engine`, `box`, `status`
+(`measured`|`declared-unvalidated`|`virtual-32gb-capacity-only`), `[pins]`
+table, `transcripts` (paths under `docs/evidence/`).
+
+## Usage
+
+    lab arm overview
+    lab arm list [--root PATH] [--json]
+    lab arm show <path> [--json]
+
+## See also
+
+    lab explain arm overview
+    lab explain arm list
+    lab explain arm show
+"""
+
+_ARM_OVERVIEW = """\
+# edge-ai-lab arm overview
+
+Describes the `arm` noun: its verbs and the `arm.toml` manifest schema.
+
+## Usage
+
+    lab arm overview
+    lab arm overview --json
+"""
+
+_ARM_LIST = """\
+# edge-ai-lab arm list
+
+Walks `<root>/setup/**/arm.toml` (root defaults to this checkout's repo root)
+and prints one row per arm: `device_class`, `model`, `configuration`,
+`format`, `status`, `path`. A manifest that fails to parse or validate is
+skipped with a diagnostic on stderr rather than aborting the whole listing.
+
+## Usage
+
+    lab arm list
+    lab arm list --root /path/to/checkout
+    lab arm list --json
+"""
+
+_ARM_SHOW = """\
+# edge-ai-lab arm show <path>
+
+Prints one arm's manifest. `<path>` is either the arm's directory or its
+`arm.toml` file directly. Parsed and validated with `tomllib`: a missing
+required field, an invalid `format`/`status` enum value, or a missing file
+raises a structured error (exit 1) naming the problem field.
+
+## Usage
+
+    lab arm show setup/spark/qwen3.8-27b-fp8/vllm-mtp/
+    lab arm show setup/spark/qwen3.8-27b-fp8/vllm-mtp/arm.toml --json
+"""
+
+_ARM_VALIDATE = """\
+# edge-ai-lab arm validate <path>
+
+Checks an arm against `docs/lab-conventions.md`: the manifest loads
+(`arm.py`'s helpers), the README carries `## Rollback` (a fenced,
+non-placeholder command), `## Build footprint` (measured `Build time:`,
+`Disk delta:`, `Retention:`), and `## Pins` (every manifest `[pins]` key,
+empty pins explained with `empty`/`n/a`); the honesty status marker matches
+`status` (`measured` transcripts exist on disk, `declared-unvalidated` README
+carries `DECLARED, UNVALIDATED`, `virtual-32gb-capacity-only` README and
+manifest carry `capacity-only` and README carries `measured on 64GB
+hardware`); the `Dockerfile` (if present) pins a `FROM ...@sha256:` digest or
+carries a jetson-containers header (commit + `L4T_VERSION`/`CUDA_VERSION`/
+`CUDA_ARCH`); and no secret-like pattern appears under the arm directory.
+Each check reports `{id, passed, message}`; exit 0 only if every check
+passes, else a structured error naming the first failing check.
+
+## Usage
+
+    lab arm validate setup/spark/qwen3.8-27b-fp8/vllm-mtp/
+    lab arm validate setup/spark/qwen3.8-27b-fp8/vllm-mtp/arm.toml --json
+    lab arm validate <path> --root /path/to/checkout
+"""
+
+
+_ARM_EXPORT = """\
+# edge-ai-lab arm export <path> --format arena
+
+Hands an arm's result to a downstream store. The only target is jetson-arena,
+and its ingest shape is **not yet agreed** — the proposal is
+<https://github.com/agentculture/jetson-arena/issues/8>. Until that thread
+records agreement this verb validates the manifest and then refuses with
+`arena-format-not-agreed` (exit 1), pointing at the issue. It never posts
+anywhere: the lab emits, jetson-arena stores and publishes
+(`docs/lab-conventions.md` section 9).
+
+## Usage
+
+    lab arm export setup/spark/qwen3.8-27b-fp8/vllm-mtp/ --format arena
+    lab arm export setup/spark/qwen3.8-27b-fp8/vllm-mtp/ --format arena --json
+"""
+
+
+_ARM_RUN = """\
+# edge-ai-lab arm run <path>
+
+Runs one arm on the box it names (`docs/lab-conventions.md` sections 3-5, 8,
+10). Enforces one arm per box with a box-wide lock: `$LAB_BOX_LOCK` if set,
+else `/var/tmp/edge-ai-lab/arm.lock`, else `~/.edge-ai-lab/arm.lock` (the
+fallback is reported as a `warning:` and recorded in the transcript). The
+lock is created atomically; if it already names a running arm the run
+refuses and the `hint:` line names that arm's path; a lock whose pid is
+dead is reported as stale and still refused (never auto-removed). While the
+lock is held the run captures a best-effort before snapshot (`docker ps`,
+`docker system df`, `df -h /`, `nvpmodel -q`, GPU devfreq, `free -g`,
+thermals — a missing tool records `unavailable`), launches `uvx
+sparkrun==<pins.sparkrun_version> run <recipe>` (`SPARKRUN_NO_TELEMETRY=1`)
+for a `sparkrun-recipe` arm or each `[run].commands` entry for a
+`lobes-override` arm in its own process group (SIGTERM/SIGINT are forwarded
+to it and awaited), captures the after snapshot, probes the gateway's
+`GET /capabilities` (the HTTP status is recorded; non-200 is a warning), and
+writes the transcript under `docs/evidence/` plus a sidecar directory of the
+same stem holding verbatim copies of `arm.toml`, the driving recipe or
+profile override, and `run.json`; only then is the lock released
+(owner-checked). Transcripts are never overwritten (`-2`, `-3`, ...) and
+their `## measurements` lines stay empty — a run never fabricates a number.
+A launch that exits non-zero still produces the transcript, then `arm run`
+exits 2. `[run].port` must not be 8000/8001 (the fleet's own ports).
+`--deploy-dir` only locates transcript state; it does not affect the lock.
+`--dry-run` does everything except the launch and reports the argv/env.
+
+## Usage
+
+    lab arm run setup/spark/qwen3.8-27b-fp8/vllm-mtp/
+    lab arm run setup/spark/qwen3.8-27b-fp8/vllm-mtp/ --dry-run --json
+    LAB_BOX_LOCK=/tmp/lab.lock lab arm run <path>   # tests only
 """
 
 
@@ -127,4 +275,11 @@ ENTRIES: dict[tuple[str, ...], str] = {
     ("doctor",): _DOCTOR,
     ("cli",): _CLI,
     ("cli", "overview"): _CLI,
+    ("arm",): _ARM,
+    ("arm", "overview"): _ARM_OVERVIEW,
+    ("arm", "list"): _ARM_LIST,
+    ("arm", "show"): _ARM_SHOW,
+    ("arm", "validate"): _ARM_VALIDATE,
+    ("arm", "export"): _ARM_EXPORT,
+    ("arm", "run"): _ARM_RUN,
 }

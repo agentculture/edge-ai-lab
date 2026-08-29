@@ -1,0 +1,16 @@
+device_class = "spark"
+model = "Qwen/Qwen3.8-27B-FP8"
+configuration = "vllm-mtp"
+format = "sparkrun-recipe"
+engine = "vllm"
+box = "spark"
+status = "declared-unvalidated"
+transcripts = []
+
+[pins]
+image_digest = "sha256:abc123"
+model_revision = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+sparkrun_version = "0.3.6"
+jetson_containers_commit = ""
+jetson_containers_packages = ""
+model_gear_version = ""

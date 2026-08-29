@@ -1,0 +1,17 @@
+# Declared arm — nothing here has been booted or measured (Orin Nano not connected).
+device_class = "orin-nano-8"
+model = "LiquidAI/LFM2.5-1.2B-Instruct"
+configuration = "vllm-hand-audio"
+format = "lobes-override"
+engine = "vllm"
+box = "nano"
+status = "declared-unvalidated"
+transcripts = []
+
+[pins]
+image_digest = ""                          # empty — see README "Pins": no sm_87 vLLM hand image is pinned by digest anywhere in lobes-cli
+model_revision = "0f604ada3f766f9f257460c4c9f0b5d6f69d431b"   # git ls-remote https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct HEAD, 2026-08-29
+sparkrun_version = ""                      # empty — Jetson arms do not use sparkrun (docs/lab-conventions.md section 10)
+jetson_containers_commit = "3717f380fc9543090c7a2e07d00772d6e05907f8"
+jetson_containers_packages = "llama_cpp:b7368 (not used by this arm; recorded for the ledger image family)"
+model_gear_version = "0.69.2"              # ../lobes-cli/pyproject.toml on 2026-08-29
