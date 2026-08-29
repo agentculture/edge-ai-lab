@@ -97,6 +97,7 @@ format = "sparkrun-recipe"
 engine = "vllm"
 box = "spark"
 status = "declared-unvalidated"   # flips to "measured" when a transcript lands
+transcripts = []                  # top-level: must come BEFORE any [table] header
 
 [pins]
 image_digest = "sha256:<64 hex>"           # never a tag
@@ -105,8 +106,6 @@ sparkrun_version = "0.3.6"
 jetson_containers_commit = ""              # empty for an upstream-FROM Spark image
 jetson_containers_packages = ""            # e.g. "vllm:0.13.0" on a Jetson arm
 model_gear_version = ""                    # set when a lobes lane is involved
-
-transcripts = []
 ```
 
 A Jetson arm sets `format = "lobes-override"`, fills
