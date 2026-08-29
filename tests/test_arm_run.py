@@ -221,7 +221,7 @@ class _CapabilitiesHandler(BaseHTTPRequestHandler):
         pass
 
 
-@pytest.fixture()
+@pytest.fixture
 def capabilities_server() -> object:
     server = HTTPServer(("127.0.0.1", 0), _CapabilitiesHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
