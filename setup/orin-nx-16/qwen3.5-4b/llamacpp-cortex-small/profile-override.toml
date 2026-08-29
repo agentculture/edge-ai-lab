@@ -1,0 +1,37 @@
+# Operator card profile for a Jetson Orin NX 16GB — DECLARED, UNVALIDATED.
+# Drop into <deploy-dir>/profiles/orin-nx-16.toml (stem must equal `name`).
+# Only the RoleProfile knobs from lobes/profiles/schema.py KNOB_NAMES are used.
+name = "orin-nx-16"
+summary = "Jetson Orin NX 16GB (Ampere sm_87, 16 GB unified) — DECLARED, UNVALIDATED: small llama.cpp GGUF cortex + hand; no senses, no pooling gears"
+
+gpu_access = "runtime"   # CSV-mode container toolkit, as orin.toml line 86
+
+[roles.cortex]
+feasible = true
+# A GGUF id served by the llama.cpp lane (llamacpp-primary is the ONLY llama.cpp
+# lane in lobes/templates/fleet/docker-compose.yml). Q4_K_M is 2.55 GiB on the
+# HF tree listing (api/models/unsloth/Qwen3.5-4B-GGUF/tree/main, 2026-08-29).
+# NOTE: this id is NOT in lobes/catalog.py yet; lobes derives the engine from the
+# catalog entry (lobes/profiles/render.py role_engine), so a catalog entry is a
+# precondition for rendering — requested in the lobes-cli issue in the README.
+model = "unsloth/Qwen3.5-4B-GGUF:Q4_K_M"
+# gpu_mem_util is deliberately absent: it renders --gpu-memory-utilization, a
+# vLLM flag the llama.cpp lane does not consume.
+max_model_len = 32768   # DECLARED ceiling well under the card's native window; measure before raising
+
+[roles.senses]
+feasible = false   # the int4 W4A16 Gemma senses gear the 64GB Orin serves (~7 GiB weights) does not fit beside cortex + hand in 16 GB; re-declare after a measured cortex boot
+
+[roles.hand]
+feasible = true
+model = "LiquidAI/LFM2.5-1.2B-Instruct"
+gpu_mem_util = 0.20   # DECLARED: ~2.4 GiB bf16 weights (orin.toml hand comment) / 16 GB ~= 0.15 + KV headroom
+max_model_len = 8192
+max_num_seqs = 2
+attention_backend = "TRITON_ATTN"
+
+[roles.embedder]
+feasible = false   # orin.toml's 0.06 of 61 GiB is ~3.7 GiB; 0.06 of 16 GB is under the 0.6B model's ~1.2 GiB bf16 weights — declare off until measured
+
+[roles.reranker]
+feasible = false   # same reasoning as embedder

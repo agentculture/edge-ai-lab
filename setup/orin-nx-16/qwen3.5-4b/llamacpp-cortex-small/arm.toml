@@ -1,0 +1,17 @@
+# Declared arm — nothing here has been booted or measured (no Orin NX 16GB is owned).
+device_class = "orin-nx-16"
+model = "unsloth/Qwen3.5-4B-GGUF:Q4_K_M"
+configuration = "llamacpp-cortex-small"
+format = "lobes-override"
+engine = "llama.cpp"
+box = "nx"
+status = "declared-unvalidated"
+transcripts = []
+
+[pins]
+image_digest = "sha256:f7c67c102b08252e963f9e5f92c3a36554c8f69305eb7ea257c6cd12e24c3191"   # ghcr.io/nvidia-ai-iot/llama_cpp — ../lobes-cli/docs/image-ledger.md, the llama.cpp lane row (sm_87 exercised)
+model_revision = "e87f176479d0855a907a41277aca2f8ee7a09523"   # git ls-remote https://huggingface.co/unsloth/Qwen3.5-4B-GGUF HEAD, 2026-08-29
+sparkrun_version = ""                      # empty — Jetson arms do not use sparkrun (docs/lab-conventions.md section 10)
+jetson_containers_commit = "3717f380fc9543090c7a2e07d00772d6e05907f8"
+jetson_containers_packages = "llama_cpp:b7368"   # ../jetson-containers-nv/packages/llm/llama_cpp/config.py default; the ledger image is NVIDIA's own build 38406d597, recorded for comparison
+model_gear_version = "0.69.2"              # ../lobes-cli/pyproject.toml on 2026-08-29

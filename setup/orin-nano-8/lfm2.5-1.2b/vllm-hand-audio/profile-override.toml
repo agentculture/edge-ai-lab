@@ -1,0 +1,37 @@
+# Operator card profile for a Jetson Orin Nano 8GB — DECLARED, UNVALIDATED.
+# Drop into <deploy-dir>/profiles/orin-nano-8.toml (stem must equal `name`).
+# Only the RoleProfile knobs from lobes/profiles/schema.py KNOB_NAMES are used.
+name = "orin-nano-8"
+summary = "Jetson Orin Nano 8GB (Ampere sm_87, 8 GB unified) — DECLARED, UNVALIDATED: hand + audio sidecars only; no cortex/senses/pooling gears"
+
+# JetPack 6 nvidia-container-toolkit resolves to CSV mode on Orin-class boards
+# (lobes/profiles/builtin/orin.toml line 86 declares the same for the 64GB card).
+gpu_access = "runtime"
+
+[roles.cortex]
+feasible = false   # no 8 GB-class cortex checkpoint in the lobes catalog; the NVFP4 27B primaries need Blackwell (lobes/machines/orin.py)
+
+[roles.senses]
+feasible = false   # Gemma-4-12B senses gear (~12B params) cannot fit 8 GB unified memory beside the hand
+
+[roles.hand]
+feasible = true
+model = "LiquidAI/LFM2.5-1.2B-Instruct"
+# DECLARED budget, not measured: orin.toml's hand comment cites ~2.4 GiB bf16
+# weights; the Nano fixture in lobes-cli tests/test_detect.py reports 7.4 GB
+# usable, so 0.40 * 7.4 GB ~= 3.0 GB leaves ~0.6 GB for KV at 8192 context.
+# The Orin 64GB card refuted its own declared hand budget twice
+# (orin.toml hand comment) — expect this value to move on first boot.
+gpu_mem_util = 0.40
+max_model_len = 8192
+max_num_seqs = 2
+# sm_87 has no FlashAttention-3/FlashInfer path; orin.toml pins TRITON_ATTN for hand.
+attention_backend = "TRITON_ATTN"
+# quantization is deliberately absent: the catalog's quantization="none" bf16
+# sentinel means the lane must omit --quantization entirely (orin.toml hand comment).
+
+[roles.embedder]
+feasible = false   # Qwen3-Embedding-0.6B would fit by weight (~1.2 GiB bf16) but not beside hand + stt + tts on 8 GB; re-declare after a measured hand boot
+
+[roles.reranker]
+feasible = false   # same reasoning as embedder
