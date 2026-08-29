@@ -1,0 +1,747 @@
+{
+  "slug": "edge-arms-across-nvidia-boxes",
+  "title": "edge-arms-across-nvidia-boxes",
+  "frame_slug": "edge-arms-across-nvidia-boxes",
+  "schema_version": 4,
+  "status": "exported",
+  "created": "2026-08-29T16:11:33Z",
+  "updated": "2026-08-29T16:54:22Z",
+  "targets": [
+    {
+      "id": "c1",
+      "kind": "announcement",
+      "text": "edge-ai-lab builds and runs experiment arms \u2014 Dockerfiles, sparkrun recipes and lobes profiles/shapes \u2014 across DGX Spark, Jetson Thor, AGX Orin 64/32GB, Orin NX 16GB and Orin Nano 8GB, and hands proven configurations to lobes-cli with evidence transcripts",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h1",
+      "kind": "honesty",
+      "text": "Every hardware class named in the announcement has a defined arm format (sparkrun recipe for Spark; lobes profile/shape override for Jetson) and an explicit validation status (measured vs DECLARED/UNVALIDATED) \u2014 none is implied validated",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c2",
+      "kind": "requirement",
+      "text": "Lab output to lobes-cli is a card profile TOML (stem == name; only the 12 RoleProfile knobs in lobes/profiles/schema.py:79-141; unknown knob = load error; gpu_access=\"runtime\" for CSV-mode Jetsons; [[exclusive_roles]]; [host_env]) plus optional shape TOML (name/summary/hosts/[overrides.*] only), an image-ledger row (digest, arch exercised, evidence link), a catalog SupportedModel + docs/<model>.md (status=\"configured\" until lobes boots it), and regenerated goldens",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h2",
+      "kind": "honesty",
+      "text": "A lab-authored profile TOML loads through lobes-cli's loader without error (uv run lobes profile show <name> against an operator profiles/ dir) and tests/goldens/regen.py diff shows only the new card's keys",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c3",
+      "kind": "requirement",
+      "text": "Spark-class arms are sparkrun recipe_version 2 YAMLs (model, runtime, container, defaults, metadata VRAM inputs, benchmark, command, executor_config); container: is a free-form image ref so lab-built images plug in; arms run as sparkrun run ./arm.yaml or from a lab registry repo carrying .sparkrun/registry.yaml; sparkrun 0.3.6 runs here via uvx without a clone",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h3",
+      "kind": "honesty",
+      "text": "sparkrun show ./arm.yaml and sparkrun run ./arm.yaml succeed on this Spark with a lab-built container: tag, and the recipe validates as recipe_version 2 without CLI overrides",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c4",
+      "kind": "requirement",
+      "text": "Image building rides jetson-containers-nv's package system (Dockerfile YAML header name/depends/requires, config.py build_args like VLLM_VERSION/IS_SBSA/LLAMA_CPP_FLAGS/CUDA_ARCHITECTURES; get_cuda_arch() gives Orin [87], JP7 tegra [87,110,120,121], SBSA [110,121]; base is ubuntu:LSB_RELEASE for JP6/JP7) \u2014 the lab targets arches by L4T_VERSION/CUDA_VERSION/CUDA_ARCH env, not hand-rolled base images",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h4",
+      "kind": "honesty",
+      "text": "Each lab Dockerfile records the jetson-containers-nv package chain and env (L4T_VERSION/CUDA_VERSION/CUDA_ARCH) it was built with, and the resulting image's CUDA arch list matches the target board (sm_87 for Orin, sm_121 for Spark)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c5",
+      "kind": "requirement",
+      "text": "Orin NX 16GB and Orin Nano 8GB need a new lobes CardStrategy + profile: tests/test_detect.py:334-344 deliberately refuses to resolve them to the 64GB orin card, and the 2026-07-13 spec says the profile must downshift cortex to a smaller model or declare it infeasible (a 27B NVFP4 cortex cannot run on Nano); AGX Orin 32GB likewise has no distinct profile",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h5",
+      "kind": "honesty",
+      "text": "A Nano/NX profile is never silently produced by the 64GB orin card: the lab's profile names the box class explicitly and its cortex entry is either a model that fits the box's memory or feasible=false",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c6",
+      "kind": "requirement",
+      "text": "The lab's results store adopts lobes' evidence discipline from day one: docs/evidence/YYYY-MM-DD-<verb>-<subject>-<box>.txt transcripts (verbs accept/spike/measure/baseline/partial), docs/experiments/<name>.md for arms not adopted (what/why/why-not), sparkrun_benchmark v1 YAML for arena runs; decode from usage.completion_tokens, pinned clocks + recorded conditions (nvpmodel, devfreq, docker ps, thermals, image digest), incumbent baselined first; anything without a transcript is labelled UNVALIDATED",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h6",
+      "kind": "honesty",
+      "text": "No number appears in a lab README, table or CLI output without a transcript path next to it; decode figures cite usage.completion_tokens; every transcript records clocks/power mode, co-resident containers and image digest",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c8",
+      "kind": "boundary",
+      "text": "Hand-off is an issue or PR on lobes-cli (communicate skill, auto-signed), never an edit from this checkout \u2014 lobes-cli CLAUDE.md:958-971 fixes the sibling pattern as 'files issues on siblings but never edits them'; lobes-cli additionally requires every PR to bump version and reply to every review thread",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h10",
+      "kind": "honesty",
+      "text": "Every hand-off to lobes-cli in the lab's history is a PR or issue on lobes-cli filed via the communicate skill \u2014 no commit in ../lobes-cli originates from the edge-ai-lab checkout",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c10",
+      "kind": "boundary",
+      "text": "sparkrun is consumed as a PyPI/uvx tool (0.3.6, Apache-2.0, upstream spark-arena/sparkrun; agentculture/sparkrun is a same-version fork) \u2014 the lab does not clone or vendor its source, and any Thor/Orin use of it is unvalidated because a non-GB10 host falls into GenericNvidiaPlatform with x86-oriented default images and loses GB10 tuning",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h12",
+      "kind": "honesty",
+      "text": "The lab's tooling invokes sparkrun only through uvx/pip with a pinned version recorded in the arm; no sparkrun source tree lives in this repo or the workspace, and every non-GB10 sparkrun run is marked UNVALIDATED in its transcript",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c11",
+      "kind": "boundary",
+      "text": "The lab explores, it does not serve: it does not replace lobes' compose fleet (lobes/templates/fleet/docker-compose.yml) or model-gear's scaffold, and it never edits vendored skills under .claude/skills/ (cite verbatim, re-sync via docs/skill-sources.md)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h13",
+      "kind": "honesty",
+      "text": "No compose file, systemd unit or gateway in this repo serves models to the mesh \u2014 anything long-running belongs to lobes; .claude/skills/ diffs against their upstreams stay byte-empty except the ledgered divergences in docs/skill-sources.md",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c13",
+      "kind": "requirement",
+      "text": "Dockerfiles are checked into edge-ai-lab under a path scheme setup/<device-class>/<model>/<configuration>/ (Dockerfile + arm definition \u2014 sparkrun recipe or lobes profile/shape override \u2014 + transcript kept together) so any arm is findable by path and reproducible without re-deriving flags",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h7",
+      "kind": "honesty",
+      "text": "A newcomer can locate any arm from its device class, model and configuration alone, and the directory contains everything needed to rebuild and relaunch it without consulting chat history",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c14",
+      "kind": "requirement",
+      "text": "The lab maintains a lab-owned sparkrun registry (.sparkrun/registry.yaml declaring recipes/, benchmarks/, tuning/ subpaths) and uploads arena results via sparkrun benchmark perf --arena, so Spark arms are consumable by any sparkrun user by @<registry>/<name>",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h8",
+      "kind": "honesty",
+      "text": "sparkrun registry add <lab-repo-url> resolves the lab's recipes by @<name>/<recipe>, and an arena upload from a lab recipe is visible under the lab's arena account",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c15",
+      "kind": "requirement",
+      "text": "Results flow to jetson-arena for storage and publication: the lab emits statistics in a form jetson-arena can ingest (sparkrun_benchmark v1 YAML for Spark, lobes-style transcripts for Jetson), and jetson-arena \u2014 not the lab \u2014 owns posting them",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h9",
+      "kind": "honesty",
+      "text": "jetson-arena's ingest format is agreed (as an issue on jetson-arena) before the lab commits to an export shape; the lab never posts statistics itself",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c18",
+      "kind": "audience",
+      "text": "The edge-ai-lab agent and its operator running arms; lobes-cli (consumer of proven profiles/shapes/lock files); jetson-arena (consumer of statistics); any sparkrun user pulling @<lab-registry>/<recipe>",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h14",
+      "kind": "honesty",
+      "text": "Each named audience has a concrete consumption path that exists: lobes-cli via profile/shape/lock PR or issue; jetson-arena via an agreed ingest format; sparkrun users via sparkrun registry add <lab-repo>",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c19",
+      "kind": "before_state",
+      "text": "Today edge-ai-lab is an identity scaffold with no experiment noun, no Dockerfiles, no results store; lobes-cli has profiles only for spark/thor/orin-64GB, its deployments/ catalog is empty, sparkrun has no Jetson notion, and jetson-arena is a scaffold \u2014 every Orin NX/Nano/32GB configuration is UNVALIDATED by definition",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h15",
+      "kind": "honesty",
+      "text": "The before-state is checkable against today's tree: git ls-files shows no setup/, docs/evidence/ or Dockerfile in edge-ai-lab; lobes-cli builtin/ holds exactly spark/thor/orin/base; lobes-cli deployments/ holds no variation",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c20",
+      "kind": "why_it_matters",
+      "text": "Serving decisions on the mesh are made on measured evidence (lobes #108); without a lab that owns the arms, the Dockerfiles and the transcripts, every new box or checkpoint is re-derived ad hoc, baselines are lost when models swap, and lobes' variation catalog stays empty",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h16",
+      "kind": "honesty",
+      "text": "At least one concrete loss is documented in the lab's README with a source \u2014 e.g. lobes' playbook rule 1 (the incumbent baseline is unrecoverable once the model is swapped) \u2014 rather than asserted generically",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c21",
+      "kind": "after_state",
+      "text": "An arm is a path setup/<device-class>/<model>/<configuration>/ holding a Dockerfile, its recipe or profile override and its transcript; lab recipes resolve via a lab sparkrun registry with arena results uploaded; proven configurations reach lobes-cli as profile/shape/lock-file PRs or issues with an evidence transcript; Orin 64GB (and virtual-32GB) arms are measured here, Thor/Nano arms are declared and labelled UNVALIDATED",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h17",
+      "kind": "honesty",
+      "text": "Every element of the after-state maps to a checked-in artifact: a setup/ tree, a .sparkrun/registry.yaml, a docs/evidence/ transcript, and a lobes-cli issue/PR URL recorded in the arm's README; Thor/Nano arm READMEs carry DECLARED, UNVALIDATED",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c22",
+      "kind": "success_signal",
+      "text": "At least one Spark arm and one AGX Orin 64GB arm exist end-to-end: Dockerfile builds, sparkrun/lobes launches it, a transcript under docs/evidence/ records usage.completion_tokens-based throughput with pinned clocks and conditions, the Spark result appears in the lab registry + arena upload, and a lobes-cli issue or PR carries the resulting profile/shape/lock file",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h18",
+      "kind": "honesty",
+      "text": "The success signal is met only when both transcripts exist under docs/evidence/ with usage.completion_tokens-based figures and pinned-clock conditions, the Spark upload is visible on arena, and the lobes-cli issue/PR link resolves \u2014 a partial (one box only) is reported as partial",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c23",
+      "kind": "why_it_matters",
+      "text": "Separate the experiments layer from the serving/production layer: the lab is where things are allowed to break, be re-flagged and re-measured; lobes is where only proven configurations run \u2014 keeping them apart means an experiment can never destabilise the fleet the mesh depends on, and a served config always has a traceable experiment behind it",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h19",
+      "kind": "honesty",
+      "text": "No experiment ever runs against the production lobes fleet ports/compose on a box: lab arms bind their own ports or run while the fleet lane is down, the transcript names the co-resident containers (docker ps), and every served lobes configuration can be traced back to a lab arm path",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c24",
+      "kind": "requirement",
+      "text": "Arms on a box that also serves the lobes fleet declare a memory budget that fits beside the co-resident lanes (this Spark runs model-gear-vllm-primary/-rerank + gateway :8001, the backend ask-colleague uses) or run inside a declared downtime window with the lane stopped; sparkrun's default gpu_memory_utilization 0.8 and GB10 0.85 cap are never used unqualified on a shared box",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h20",
+      "kind": "honesty",
+      "text": "Every transcript from a fleet box shows docker ps before and after and the gateway /capabilities answering after the arm exits, or a logged downtime window with the lane stopped",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c26",
+      "kind": "requirement",
+      "text": "A lab-captured lobes deployment lock must satisfy the variation-catalog contract enforced by lobes/variation_catalog.py: deployments/<variation-id>/VARIATION.md with either a cited docs/evidence transcript or the exact line 'No measured result.' (a blank section is a failure), and lobes doctor reporting no lock_drift on the captured box",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h22",
+      "kind": "honesty",
+      "text": "The lab's lock directory passes lobes-cli's tests/test_variation_catalog.py validator when dropped under deployments/ and lobes doctor --json on the captured box reports lock_drift clean",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c27",
+      "kind": "requirement",
+      "text": "Every arm pins what it was built and run from: jetson-containers-nv commit SHA + package versions (vllm 0.13.0 is default=True today and moves), image digest not tag, model_revision / hf_revision commit SHA, sparkrun version, and the lobes MODEL_GEAR_VERSION where a lobes lane is involved",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h23",
+      "kind": "honesty",
+      "text": "Rebuilding an arm from its README alone on a clean box yields the same image digest (or a documented reason it cannot, e.g. upstream nightly)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c29",
+      "kind": "requirement",
+      "text": "The colleague resident is an actor that runs arms and never loads CLAUDE.md: the evidence discipline, the shared-box budget rule and the arm path scheme are written into AGENTS.colleague.md (11 lines today), not only CLAUDE.md",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h25",
+      "kind": "honesty",
+      "text": "AGENTS.colleague.md names the arm path scheme, the transcript rule and the shared-box budget rule; lab doctor checks the file mentions them",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c30",
+      "kind": "requirement",
+      "text": "One arm at a time per box: an arm run leaves a box-level marker (e.g. a docker label or a lock file under the deploy dir) that a second run \u2014 from another Claude session, the colleague resident, or an operator \u2014 detects and refuses, and the transcript records any concurrent arm it found",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h26",
+      "kind": "honesty",
+      "text": "Starting a second arm on a box with a live marker exits non-zero with a hint naming the running arm; the marker is removed on exit including abnormal exit",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c31",
+      "kind": "requirement",
+      "text": "Each arm README states its measured build time and disk footprint (docker system df before/after) and its retention: images and HF cache entries not promoted to a transcript-backed configuration are pruned, because Orin-class builds take hours and Nano-class disks are small (this Spark's HF cache alone is 307 GB)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h27",
+      "kind": "honesty",
+      "text": "Each arm README has build-time, disk-delta and retention lines filled from a measurement, not estimated",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c32",
+      "kind": "boundary",
+      "text": "No secrets, tokens or hostnames in arm files: sparkrun passes env: literally and arena uploads publish the recipe text and logs, so HF/nvcr.io credentials go via cluster env_file; sparkrun telemetry (on by default to telemetry.sparkrun.dev) is an explicit decision recorded in the lab, and pre_exec/post_exec hooks from non-lab registries run only after review with --trust",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h28",
+      "kind": "honesty",
+      "text": "git grep over setup/ finds no token, password or private hostname; the telemetry decision is a recorded decision claim; no --trust use without a review note in the arm README",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c33",
+      "kind": "requirement",
+      "text": "Before an arm runs on a fleet box the arm README carries the rollback recipe as literal commands (lobes playbook rule 9): how to restore the fleet lane and its .env, checked by hitting the gateway /capabilities after the arm exits",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h29",
+      "kind": "honesty",
+      "text": "The rollback section exists before the first run (git history shows it in the same commit as the arm) and has been executed at least once on a fleet box with the result in the transcript",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c35",
+      "kind": "requirement",
+      "text": "The Orin Nano 8GB arm targets the roles it can plausibly hold \u2014 hand and the audio sidecars (stt/tts) \u2014 and the lab may propose new lobes roles ('lobes') sized for the Nano, filed on lobes-cli as issues",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h30",
+      "kind": "honesty",
+      "text": "The Nano arm's lobes profile declares cortex/senses feasible=false and hosts only hand + stt/tts (or lab-proposed roles filed as lobes-cli issues); no Nano artifact claims a role the 8GB board has not booted",
+      "deferred": false,
+      "deferred_reason": ""
+    }
+  ],
+  "tasks": [
+    {
+      "id": "t1",
+      "summary": "Write docs/lab-conventions.md \u2014 the lab's rulebook: arm path scheme setup/<device-class>/<model>/<configuration>/, arm manifest fields, evidence naming YYYY-MM-DD-<verb>-<subject>-<box>.txt, docs/experiments/ for non-adopted arms, shared-box budget rule, pin manifest (jetson-containers commit, package versions, image digest, model_revision, sparkrun version, MODEL_GEAR_VERSION), rollback section, build-footprint/retention lines, secrets rule, sparkrun telemetry decision (disabled via SPARKRUN_NO_TELEMETRY=1), hand-off = issue/PR on lobes-cli, sparkrun via uvx only, lab never serves",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "docs/lab-conventions.md exists, passes markdownlint-cli2, and has a numbered section for each of: path scheme, manifest, evidence naming, shared-box budget, pins, rollback, footprint/retention, secrets+telemetry, hand-off, sparkrun-via-uvx, lab-never-serves",
+        "Every rule cites its source (lobes-cli file path or sparkrun doc) inline; no number appears without a transcript path"
+      ],
+      "deps": [],
+      "covers": [
+        "c6",
+        "h6",
+        "c13",
+        "c27",
+        "c31",
+        "c32",
+        "h28",
+        "c33",
+        "c8",
+        "h10",
+        "c10",
+        "h12",
+        "c11",
+        "h13",
+        "c24"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t2",
+      "summary": "Update AGENTS.colleague.md (resident prompt) and README.md: the resident learns the arm path scheme, the transcript rule and the shared-box budget rule; README gains Why it matters (cites lobes playbook rule 1: incumbent baseline unrecoverable after swap), the experiments-vs-serving separation, the audiences and their consumption paths, and an honest before-state; CLAUDE.md moves the planned surface under Roadmap with the built parts marked",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "AGENTS.colleague.md contains the literal phrases 'setup/<device-class>/<model>/<configuration>', 'docs/evidence/' and 'shared-box budget'",
+        "README.md cites ../lobes-cli/docs/model-switch-playbook.md rule 1 by path and names lobes-cli, jetson-arena and sparkrun users as audiences with one consumption path each; markdownlint passes"
+      ],
+      "deps": [
+        "t1"
+      ],
+      "covers": [
+        "c29",
+        "c19",
+        "h15",
+        "c20",
+        "h16",
+        "c23",
+        "c18",
+        "h14"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t3",
+      "summary": "Add the arm noun to the CLI: arm overview, arm list (walk setup/**/arm.toml), arm show <path> (device_class, model, configuration, format = sparkrun-recipe|lobes-override, engine, box, status = measured|declared-unvalidated|virtual-32gb-capacity-only, pins table, transcript paths); arm.toml parsed with tomllib; explain catalog entries for every new path",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "tests/test_arm.py: arm list on a tmp setup/ tree with two manifests returns both in text and --json; arm show on a manifest missing a required field raises CliError with a remediation naming the field; test_every_catalog_path_resolves passes",
+        "grep -r 'import yaml' edge_ai_lab/ is empty; pyproject dependencies stays []",
+        "The arm group lives in edge_ai_lab/cli/_commands/arm.py and its catalog entries in explain/catalog.py; later verbs (validate, run, export) are added as arm_<verb>.py modules that arm.py imports by name, so each later task edits its own module plus one import line"
+      ],
+      "deps": [
+        "t1"
+      ],
+      "covers": [
+        "c13",
+        "h7",
+        "c1",
+        "h1",
+        "c21",
+        "h17",
+        "c27"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t4",
+      "summary": "jetson-arena ingest contract: file an issue on jetson-arena (communicate skill) proposing the export shape \u2014 sparkrun_benchmark v1 YAML for Spark arms, lobes-style transcript + arm.toml for Jetson arms \u2014 and add arm export <path> --format arena that emits that shape only after the issue records agreement",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "The jetson-arena issue URL is recorded in docs/lab-conventions.md and the export code lands in a commit that references the agreed comment",
+        "tests/test_arm_export.py: export of a fixture arm emits a document whose fields match the agreed shape; the lab never posts results itself (no arena/site write path in the code)",
+        "Export code lives in edge_ai_lab/cli/_commands/arm_export.py + tests/test_arm_export.py"
+      ],
+      "deps": [
+        "t1",
+        "t3"
+      ],
+      "covers": [
+        "c15",
+        "h9"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t5",
+      "summary": "Add arm validate <path>: README has sections Rollback (before first run), Build footprint (build time, disk delta, retention \u2014 values not placeholders), Pins (every manifest pin present), Status marker (DECLARED, UNVALIDATED unless a docs/evidence transcript path in the manifest exists on disk; virtual-32GB arms carry 'capacity-only'); Dockerfile header records the jetson-containers-nv chain and env (L4T_VERSION/CUDA_VERSION/CUDA_ARCH) or the upstream digest it is FROM; no secrets",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "tests/test_arm_validate.py: a fixture arm with all sections passes; removing any one section, leaving a placeholder like 'TBD', or citing a nonexistent transcript fails with a CliError naming the section",
+        "A fixture Dockerfile without a pinned digest or jetson-containers env header fails validation",
+        "All validate code lives in edge_ai_lab/cli/_commands/arm_validate.py + tests/test_arm_validate.py; only one import line and the catalog entry touch shared files"
+      ],
+      "deps": [
+        "t3"
+      ],
+      "covers": [
+        "h23",
+        "h27",
+        "h29",
+        "c4",
+        "h4",
+        "c31",
+        "c33",
+        "c32"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t6",
+      "summary": "Add arm run <path> \u2014 the box-side wrapper (stdlib only, shells out): acquires a box marker (lock file in the deploy dir + docker label) and refuses with a hint naming the live arm if one exists, removes it on any exit; captures before/after: docker ps, docker system df, df -h, nvpmodel -q / devfreq freqs where present, free memory, thermals; probes the fleet gateway /capabilities after the arm exits; launches via 'uvx sparkrun==<pinned> run <recipe>' or the lobes override commands the manifest names; writes a transcript skeleton under docs/evidence/ with the conventions' name",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "tests/test_arm_run.py with a fake docker/uvx on PATH: second arm run while a marker exists exits 1 with 'hint:' naming the running arm; marker is gone after a simulated SIGTERM; transcript file is created with before/after blocks and the gateway probe result",
+        "arm run never writes to ~/.lobes compose files or the fleet .env (test asserts the fake fleet dir is byte-identical after a run)",
+        "All run code lives in edge_ai_lab/cli/_commands/arm_run.py + tests/test_arm_run.py; only one import line and the catalog entry touch shared files"
+      ],
+      "deps": [
+        "t3",
+        "t5"
+      ],
+      "covers": [
+        "c30",
+        "h26",
+        "c24",
+        "h20",
+        "h19",
+        "c6",
+        "c10",
+        "h12"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t7",
+      "summary": "Declared profiles for Orin Nano 8GB and Orin NX 16GB: setup/orin-nano-8/ and setup/orin-nx-16/ lobes profile TOMLs with cortex/senses feasible=false, hand + stt/tts hosted (Nano), a proposed CardStrategy sketch, summary strings carrying 'DECLARED, UNVALIDATED', and a lobes-cli issue (communicate skill) proposing the Nano/NX cards and any new Nano-sized role",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "Both TOMLs load through ../lobes-cli's loader read-only without error; each summary contains 'DECLARED, UNVALIDATED'; arm validate marks them declared-unvalidated because no transcript path exists",
+        "A lobes-cli issue URL is recorded in each arm README, posted via .claude/skills/communicate (auto-signed), proposing the card + profile and naming the roles the board can host"
+      ],
+      "deps": [
+        "t6"
+      ],
+      "covers": [
+        "c5",
+        "h5",
+        "c35",
+        "h30"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t8",
+      "summary": "Extend lab doctor with three checks: resident-rules-present (AGENTS.colleague.md names the three rules), no-secrets-in-arms (scan setup/ for token/password/private-host patterns), stdlib-only (pyproject dependencies == [] and no 'import yaml' under edge_ai_lab/)",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "tests/test_cli_introspection.py asserts each new check id appears in lab doctor --json and flips to fail on a fixture that violates it (tmp_path AGENTS file missing a rule; a setup/ file containing 'hf_xxx'; a stub module importing yaml)",
+        "uv run teken cli doctor . --strict still passes"
+      ],
+      "deps": [
+        "t2"
+      ],
+      "covers": [
+        "h25",
+        "h28",
+        "c11",
+        "h13"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t9",
+      "summary": "First Spark arm: setup/spark/qwen3.8-27b-fp8/vllm-mtp/ \u2014 Dockerfile FROM the pinned digest of ghcr.io/spark-arena/dgx-vllm-eugr-nightly building lab tag edge-ai-lab/vllm-spark:<sha>, recipe.yaml (recipe_version 2, based on @official/qwen3.8-27b-fp8-mtp-vllm, gpu_memory_utilization sized to fit beside model-gear-vllm-primary/-rerank on spark-f8a9, port not 8000/8001), arm.toml, README with rollback + footprint + pins; run via arm run; transcript with usage.completion_tokens decode at short/medium/long shapes, TTFT, pinned conditions",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "uvx sparkrun show setup/spark/qwen3.8-27b-fp8/vllm-mtp/recipe.yaml reports fits with the chosen budget; sparkrun run succeeds with the lab-built container tag and /v1/models answers",
+        "docs/evidence/<date>-spike-qwen38-fp8-mtp-spark.txt exists, cites usage.completion_tokens, docker ps before/after, and the gateway :8001 /capabilities answering after exit; arm validate passes on the directory"
+      ],
+      "deps": [
+        "t5",
+        "t6"
+      ],
+      "covers": [
+        "c3",
+        "h3",
+        "c22",
+        "h18",
+        "c24",
+        "h20",
+        "c33",
+        "h29"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t10",
+      "summary": "Lab sparkrun registry + arena upload: .sparkrun/registry.yaml (name edge-ai-lab, recipes: setup, benchmarks: benchmarks, tuning: tuning), benchmarks/edge-ai-lab-v1.yaml profile, telemetry disabled in the wrapper (SPARKRUN_NO_TELEMETRY=1), sparkrun arena login documented, first upload of the Spark arm result; results YAML committed next to the arm",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "sparkrun registry add <this repo url> then sparkrun search resolves @edge-ai-lab/vllm-mtp (or the disambiguated path form) on a clean ~/.config/sparkrun",
+        "sparkrun benchmark perf --arena on the Spark recipe produces a sparkrun_benchmark v1 YAML committed under the arm directory and the upload is visible under the lab's arena account (transcript records the submission id)"
+      ],
+      "deps": [
+        "t9"
+      ],
+      "covers": [
+        "c14",
+        "h8"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t11",
+      "summary": "First AGX Orin 64GB arm: setup/orin-agx-64/<model>/<configuration>/ \u2014 image built with jetson-containers-nv (L4T 36.x, CUDA_ARCH tegra, sm_87; header records commit + env), a lobes profile/shape override TOML using only the 12 knobs, run on Host orin beside or around the orin lanes per the shared-box rule with rollback executed once; transcript with pinned clocks (nvpmodel, devfreq min=max), prefill-vs-depth and decode-vs-length, usage.completion_tokens",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "The override TOML loads through ../lobes-cli's loader read-only (uv run --project ../lobes-cli lobes profile show against a temp profiles dir) with no error and tests/goldens/regen.py in a throwaway copy diffs only the new card's keys",
+        "docs/evidence/<date>-spike-<model>-orin.txt exists with before/after docker ps, nvpmodel -q, devfreq cur/min/max, thermals, image digest, and the rollback commands executed with their result; arm validate passes"
+      ],
+      "deps": [
+        "t5",
+        "t6"
+      ],
+      "covers": [
+        "c4",
+        "h4",
+        "c2",
+        "h2",
+        "c22",
+        "h18",
+        "c24",
+        "h20",
+        "c33",
+        "h29"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t12",
+      "summary": "Virtual-32GB arm on the Orin 64GB box: setup/orin-agx-32-virtual/<model>/<configuration>/ \u2014 same image as the Orin arm, budget capped to a 32GB board's usable memory via gpu_mem_util and executor memory_limit, README and manifest status 'virtual-32gb-capacity-only', transcript answers fit/no-fit only and quotes no tok/s as a 32GB number",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "arm validate requires and finds the literal 'capacity-only' in README and manifest; the transcript has a fit verdict and its throughput block is labelled 'measured on 64GB hardware \u2014 not a 32GB figure'"
+      ],
+      "deps": [
+        "t11"
+      ],
+      "covers": [],
+      "instruction": ""
+    },
+    {
+      "id": "t13",
+      "summary": "First Thor arm: setup/thor/<model>/<configuration>/ \u2014 lobes profile/shape override on Host thor (sm_110; sparkrun not used), image pinned by digest from the lobes image ledger or built via jetson-containers-nv JP7 path; shared-box rule applies (Thor served the fleet on 2026-08-25); transcript",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "docs/evidence/<date>-spike-<model>-thor.txt exists with the same condition blocks as the Orin arm and the gateway probe; arm.toml format = lobes-override and no recipe.yaml is present"
+      ],
+      "deps": [
+        "t5",
+        "t6"
+      ],
+      "covers": [
+        "c1",
+        "h1"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t14",
+      "summary": "Hand-off of the Orin arm to lobes-cli: capture the deployment lock on Host orin (lobes lock capture), write deployments/<variation-id>/VARIATION.md per the template citing the Orin transcript, validate with lobes-cli's tests/test_variation_catalog.py in a throwaway copy, then open a PR on lobes-cli (cicd/communicate; version bump; reply to every thread) or an issue if the change is a proposal",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "The variation directory passes test_variation_catalog.py unmodified and lobes doctor --json on Host orin reports no lock_drift at capture time",
+        "A lobes-cli PR or issue URL is recorded in the arm README; git log in ../lobes-cli shows no commit authored from this checkout"
+      ],
+      "deps": [
+        "t11"
+      ],
+      "covers": [
+        "c26",
+        "h22",
+        "c2",
+        "h2",
+        "c8",
+        "h10",
+        "c21",
+        "h17"
+      ],
+      "instruction": ""
+    }
+  ],
+  "risks": [
+    {
+      "id": "r1",
+      "text": "jetson-arena's ingest format may not be agreed quickly (arena is a scaffold with its own open execution-locus question); t4's export code waits on that agreement",
+      "kind": "unknown_nonblocking",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r2",
+      "text": "Building a lab-owned vLLM image for Spark (h3 requires a lab-built container) may mean a multi-hour SBSA jetson-containers build or a thin layer over the eugr nightly digest \u2014 t9 chooses the thin layer first; if that fails to satisfy 'lab-built', escalate",
+      "kind": "unknown_nonblocking",
+      "task_id": "t9",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r3",
+      "text": "Thor and Orin both serve the production fleet; a downtime window or budget beside the lanes must be agreed with the operator before t11/t13 run (no agreed window yet)",
+      "kind": "unknown_nonblocking",
+      "task_id": "t11",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r4",
+      "text": "Jetson unified-memory OOM can take the host down; containment via executor memory_limit + swap policy is unmeasured until t11's first run",
+      "kind": "unknown_nonblocking",
+      "task_id": "t11",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r5",
+      "text": "The Orin Nano is not connected; t7 stays declared-only and no Nano number may appear anywhere until it is",
+      "kind": "unknown_nonblocking",
+      "task_id": "t7",
+      "resolved": false,
+      "resolution": ""
+    }
+  ]
+}
