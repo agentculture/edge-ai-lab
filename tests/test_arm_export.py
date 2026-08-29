@@ -57,7 +57,8 @@ def test_export_arena_refuses_text(arm_dir: Path, capsys: pytest.CaptureFixture[
     err = capsys.readouterr().err
     assert err.startswith("error:")
     assert NOT_AGREED in err
-    assert "hint:" in err and ARENA_CONTRACT_ISSUE in err
+    assert "hint:" in err
+    assert ARENA_CONTRACT_ISSUE in err
 
 
 def test_export_unknown_format_is_cli_error(

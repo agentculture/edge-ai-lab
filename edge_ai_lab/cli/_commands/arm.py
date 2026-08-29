@@ -39,6 +39,9 @@ from edge_ai_lab.cli._output import emit_diagnostic, emit_result
 # Later tasks add their module here and nowhere else in this file.
 _VERB_MODULES = ("arm_validate", "arm_run", "arm_export")
 
+# Shared across every `--json` flag registered in this module (S1192).
+_JSON_HELP = "Emit structured JSON."
+
 # The `arm.toml` schema (docs/lab-conventions.md section 2).
 _FORMATS = {"sparkrun-recipe", "lobes-override"}
 _STATUSES = {"measured", "declared-unvalidated", "virtual-32gb-capacity-only"}
@@ -170,21 +173,23 @@ def _arm_sections() -> list[dict[str, object]]:
     ]
 
 
-def cmd_arm_overview(args: argparse.Namespace) -> int:
+def cmd_arm_overview(args: argparse.Namespace) -> None:
+    # Handler contract (cli/__init__.py::_dispatch): success is `None` (exit
+    # 0 by default); failures raise CliError. No branch here needs a
+    # different exit code, so there is nothing to vary a return value on.
     emit_overview(
         "edge-ai-lab arm",
         _arm_sections(),
         json_mode=bool(getattr(args, "json", False)),
     )
-    return 0
 
 
-def _no_verb(args: argparse.Namespace) -> int:
+def _no_verb(args: argparse.Namespace) -> None:
     # `edge-ai-lab arm` with no sub-verb prints the noun's overview.
-    return cmd_arm_overview(args)
+    cmd_arm_overview(args)
 
 
-def cmd_arm_list(args: argparse.Namespace) -> int:
+def cmd_arm_list(args: argparse.Namespace) -> None:
     root_arg = getattr(args, "root", None)
     root = Path(root_arg).resolve() if root_arg else default_root()
     json_mode = bool(getattr(args, "json", False))
@@ -209,11 +214,11 @@ def cmd_arm_list(args: argparse.Namespace) -> int:
 
     if json_mode:
         emit_result(rows, json_mode=True)
-        return 0
+        return
 
     if not rows:
         emit_result(f"no arms found under {root / 'setup'}", json_mode=False)
-        return 0
+        return
 
     lines = [
         f"{r['device_class']}/{r['model']}/{r['configuration']}"
@@ -221,17 +226,16 @@ def cmd_arm_list(args: argparse.Namespace) -> int:
         for r in rows
     ]
     emit_result("\n".join(lines), json_mode=False)
-    return 0
 
 
-def cmd_arm_show(args: argparse.Namespace) -> int:
+def cmd_arm_show(args: argparse.Namespace) -> None:
     manifest_path = _manifest_path(Path(args.path))
     data = load_manifest(manifest_path)
     json_mode = bool(getattr(args, "json", False))
 
     if json_mode:
         emit_result(data, json_mode=True)
-        return 0
+        return
 
     lines = [
         f"device_class: {data['device_class']}",
@@ -256,7 +260,6 @@ def cmd_arm_show(args: argparse.Namespace) -> int:
     else:
         lines.append("  (none)")
     emit_result("\n".join(lines), json_mode=False)
-    return 0
 
 
 def register(sub: argparse._SubParsersAction) -> None:
@@ -264,7 +267,7 @@ def register(sub: argparse._SubParsersAction) -> None:
         "arm",
         help="Experiment arms under setup/**/arm.toml (see 'edge-ai-lab arm overview').",
     )
-    p.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    p.add_argument("--json", action="store_true", help=_JSON_HELP)
     p.set_defaults(func=_no_verb, json=False)
     # `p` is a _CliArgumentParser (top-level subparsers use that parser_class);
     # propagate it so every arm sub-verb's parse errors route through the
@@ -272,7 +275,7 @@ def register(sub: argparse._SubParsersAction) -> None:
     arm_sub = p.add_subparsers(dest="arm_command", parser_class=type(p))
 
     ov = arm_sub.add_parser("overview", help="Describe the arm noun.")
-    ov.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    ov.add_argument("--json", action="store_true", help=_JSON_HELP)
     ov.set_defaults(func=cmd_arm_overview)
 
     ls = arm_sub.add_parser("list", help="List every setup/**/arm.toml under root.")
@@ -280,12 +283,12 @@ def register(sub: argparse._SubParsersAction) -> None:
         "--root",
         help="Root directory to search under (default: this checkout's repo root).",
     )
-    ls.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    ls.add_argument("--json", action="store_true", help=_JSON_HELP)
     ls.set_defaults(func=cmd_arm_list)
 
     sh = arm_sub.add_parser("show", help="Print one arm's manifest.")
     sh.add_argument("path", help="Arm directory or arm.toml path.")
-    sh.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    sh.add_argument("--json", action="store_true", help=_JSON_HELP)
     sh.set_defaults(func=cmd_arm_show)
 
     for name in _VERB_MODULES:
