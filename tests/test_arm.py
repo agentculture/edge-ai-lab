@@ -58,7 +58,7 @@ def _write_manifest(
     return manifest
 
 
-@pytest.fixture()
+@pytest.fixture
 def two_arms(tmp_path: Path) -> Path:
     _write_manifest(tmp_path, "spark", "qwen3.8-27b-fp8", "vllm-mtp", _MANIFEST_A)
     _write_manifest(tmp_path, "thor", "qwen3.8-27b-nvfp4", "lobes-default", _MANIFEST_B)
