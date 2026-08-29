@@ -138,6 +138,31 @@ def _check_resident_rules(root: Path | None = None) -> dict[str, object]:
     }
 
 
+def _iter_scannable_files(directory: Path):
+    """Yield ``(path, text)`` for regular files under ``directory``, skipping
+    anything over ``_MAX_SCAN_BYTES`` or that fails to decode as UTF-8 (i.e.
+    binaries)."""
+    for path in sorted(directory.rglob("*")):
+        if not path.is_file():
+            continue
+        try:
+            if path.stat().st_size > _MAX_SCAN_BYTES:
+                continue
+            text = path.read_bytes().decode("utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue  # skip binaries / unreadable files
+        yield path, text
+
+
+def _secret_pattern_lines(text: str) -> list[int]:
+    """1-based line numbers in ``text`` that match a secret-like pattern."""
+    return [
+        lineno
+        for lineno, line in enumerate(text.splitlines(), start=1)
+        if any(pattern.search(line) for pattern in _SECRET_PATTERNS)
+    ]
+
+
 def _check_no_secrets(root: Path | None = None) -> dict[str, object]:
     """Scan every regular file under setup/ for secret-like patterns."""
     if root is None:
@@ -155,22 +180,11 @@ def _check_no_secrets(root: Path | None = None) -> dict[str, object]:
             "remediation": "",
         }
 
-    hits: list[str] = []
-    for path in sorted(setup_dir.rglob("*")):
-        if not path.is_file():
-            continue
-        try:
-            if path.stat().st_size > _MAX_SCAN_BYTES:
-                continue
-            raw = path.read_bytes()
-            text = raw.decode("utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue  # skip binaries / unreadable files
-
-        rel = path.relative_to(root)
-        for lineno, line in enumerate(text.splitlines(), start=1):
-            if any(pattern.search(line) for pattern in _SECRET_PATTERNS):
-                hits.append(f"{rel}:{lineno}")
+    hits = [
+        f"{path.relative_to(root)}:{lineno}"
+        for path, text in _iter_scannable_files(setup_dir)
+        for lineno in _secret_pattern_lines(text)
+    ]
 
     passed = not hits
     return {
@@ -190,6 +204,36 @@ def _check_no_secrets(root: Path | None = None) -> dict[str, object]:
     }
 
 
+def _dependency_issues(pyproject_path: Path) -> list[str]:
+    """``project.dependencies`` must parse and equal ``[]``."""
+    try:
+        data = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        return [f"could not read/parse pyproject.toml: {exc}"]
+
+    deps = data.get("project", {}).get("dependencies")
+    if deps != []:
+        return [f"project.dependencies is not empty: {deps!r}"]
+    return []
+
+
+def _yaml_import_issues(pkg_dir: Path, root: Path) -> list[str]:
+    """``edge_ai_lab/`` must not ``import yaml`` / ``from yaml import ...`` anywhere."""
+    if not pkg_dir.is_dir():
+        return []
+
+    issues: list[str] = []
+    for py_file in sorted(pkg_dir.rglob("*.py")):
+        try:
+            text = py_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            if _YAML_IMPORT_RE.match(line):
+                issues.append(f"{py_file.relative_to(root)}:{lineno} imports yaml")
+    return issues
+
+
 def _check_stdlib_only(root: Path | None = None) -> dict[str, object]:
     """project.dependencies must be [] and edge_ai_lab/ must not import yaml."""
     if root is None:
@@ -197,29 +241,9 @@ def _check_stdlib_only(root: Path | None = None) -> dict[str, object]:
     if root is None:
         return _no_root_check("stdlib-only", "stdlib-only")
 
-    issues: list[str] = []
-    pyproject_path = root / "pyproject.toml"
-    try:
-        data = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
-    except (OSError, tomllib.TOMLDecodeError) as exc:
-        issues.append(f"could not read/parse pyproject.toml: {exc}")
-        data = {}
-
-    deps = data.get("project", {}).get("dependencies")
-    if deps != []:
-        issues.append(f"project.dependencies is not empty: {deps!r}")
-
-    pkg_dir = root / "edge_ai_lab"
-    if pkg_dir.is_dir():
-        for py_file in sorted(pkg_dir.rglob("*.py")):
-            try:
-                text = py_file.read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError):
-                continue
-            for lineno, line in enumerate(text.splitlines(), start=1):
-                if _YAML_IMPORT_RE.match(line):
-                    rel = py_file.relative_to(root)
-                    issues.append(f"{rel}:{lineno} imports yaml")
+    issues = _dependency_issues(root / "pyproject.toml") + _yaml_import_issues(
+        root / "edge_ai_lab", root
+    )
 
     passed = not issues
     return {
