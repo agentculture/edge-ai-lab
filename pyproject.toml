@@ -1,6 +1,6 @@
 [project]
 name = "edge-ai-lab"
-version = "0.7.0"
+version = "0.7.1"
 description = "A lab for edge AI — the exploration engine for the mesh's edge and local-model work: designs, runs and compares experiments across edge hardware and model stacks, then hands proven configurations to lobes-cli, which is the runtime that serves them."
 readme = "README.md"
 license = "Apache-2.0"

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-08-29
+
+### Changed
+
+- `CLAUDE.md` re-initialized from the seed into the full runtime prompt for the edge-ai-lab agent: what the lab is and how it relates to `lobes-cli` (the runtime it hands proven configurations to) and `sparkrun` (the DGX Spark recipe launcher used as the experiment runner), verified commands (the console script is `lab`, not `edge-ai-lab`), the agent-first CLI architecture (registration, error/output contract, explain catalog), CI/deploy shape, the evidence-before-claims / benchmark-the-incumbent-first conventions inherited from lobes-cli, the vendored-skills rules, and the worktree + memory conventions.
+- `README.md` rewritten for the lab: adds a *Where it sits* section (lobes-cli, sparkrun, the spark-cli operators) and an honest *Current state* note, fixes the Quickstart to the real `lab` binary, replaces the template *Make it your own* clone checklist with a *Contributing* section.
+
 ## [0.7.0] - 2026-08-24
 
 ### Added
