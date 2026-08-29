@@ -325,7 +325,10 @@ never an edit made from this checkout.
   swapping a served checkpoint id breaks every consumer that pins the raw id.
 - **To jetson-arena:** the lab emits statistics in the agreed ingest shape
   (task t4 files the issue that agrees it). jetson-arena stores and
-  publishes; **the lab never posts results itself.**
+  publishes; **the lab never posts results itself.** jetson-arena ingest
+  contract: proposed in <https://github.com/agentculture/jetson-arena/issues/8>
+  (2026-08-29); `arm export --format arena` refuses until that thread records
+  agreement.
 
 ## 10. sparkrun via uvx only
 

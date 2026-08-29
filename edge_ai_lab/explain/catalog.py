@@ -186,6 +186,24 @@ raises a structured error (exit 1) naming the problem field.
 """
 
 
+_ARM_EXPORT = """\
+# edge-ai-lab arm export <path> --format arena
+
+Hands an arm's result to a downstream store. The only target is jetson-arena,
+and its ingest shape is **not yet agreed** — the proposal is
+<https://github.com/agentculture/jetson-arena/issues/8>. Until that thread
+records agreement this verb validates the manifest and then refuses with
+`arena-format-not-agreed` (exit 1), pointing at the issue. It never posts
+anywhere: the lab emits, jetson-arena stores and publishes
+(`docs/lab-conventions.md` section 9).
+
+## Usage
+
+    edge-ai-lab arm export setup/spark/qwen3.8-27b-fp8/vllm-mtp/ --format arena
+    edge-ai-lab arm export setup/spark/qwen3.8-27b-fp8/vllm-mtp/ --format arena --json
+"""
+
+
 ENTRIES: dict[tuple[str, ...], str] = {
     (): _ROOT,
     ("edge-ai-lab",): _ROOT,
@@ -201,4 +219,5 @@ ENTRIES: dict[tuple[str, ...], str] = {
     ("arm", "overview"): _ARM_OVERVIEW,
     ("arm", "list"): _ARM_LIST,
     ("arm", "show"): _ARM_SHOW,
+    ("arm", "export"): _ARM_EXPORT,
 }
