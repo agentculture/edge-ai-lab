@@ -115,6 +115,76 @@ itself (distinct from the global `overview`, which describes the agent).
     edge-ai-lab cli overview --json
 """
 
+_ARM = """\
+# edge-ai-lab arm
+
+Noun group for **arms** — experiment directories at
+`setup/<device-class>/<model>/<configuration>/`, each described by an
+`arm.toml` manifest (parsed with the standard library's `tomllib`; see
+`docs/lab-conventions.md` section 2 for the full schema). Read-only today:
+`list` and `show`. Later verbs (`validate`, `run`, `export`) land as their own
+`arm_<verb>.py` modules.
+
+## Manifest fields
+
+`device_class`, `model`, `configuration`, `format`
+(`sparkrun-recipe`|`lobes-override`), `engine`, `box`, `status`
+(`measured`|`declared-unvalidated`|`virtual-32gb-capacity-only`), `[pins]`
+table, `transcripts` (paths under `docs/evidence/`).
+
+## Usage
+
+    edge-ai-lab arm overview
+    edge-ai-lab arm list [--root PATH] [--json]
+    edge-ai-lab arm show <path> [--json]
+
+## See also
+
+    edge-ai-lab explain arm overview
+    edge-ai-lab explain arm list
+    edge-ai-lab explain arm show
+"""
+
+_ARM_OVERVIEW = """\
+# edge-ai-lab arm overview
+
+Describes the `arm` noun: its verbs and the `arm.toml` manifest schema.
+
+## Usage
+
+    edge-ai-lab arm overview
+    edge-ai-lab arm overview --json
+"""
+
+_ARM_LIST = """\
+# edge-ai-lab arm list
+
+Walks `<root>/setup/**/arm.toml` (root defaults to this checkout's repo root)
+and prints one row per arm: `device_class`, `model`, `configuration`,
+`format`, `status`, `path`. A manifest that fails to parse or validate is
+skipped with a diagnostic on stderr rather than aborting the whole listing.
+
+## Usage
+
+    edge-ai-lab arm list
+    edge-ai-lab arm list --root /path/to/checkout
+    edge-ai-lab arm list --json
+"""
+
+_ARM_SHOW = """\
+# edge-ai-lab arm show <path>
+
+Prints one arm's manifest. `<path>` is either the arm's directory or its
+`arm.toml` file directly. Parsed and validated with `tomllib`: a missing
+required field, an invalid `format`/`status` enum value, or a missing file
+raises a structured error (exit 1) naming the problem field.
+
+## Usage
+
+    edge-ai-lab arm show setup/spark/qwen3.8-27b-fp8/vllm-mtp/
+    edge-ai-lab arm show setup/spark/qwen3.8-27b-fp8/vllm-mtp/arm.toml --json
+"""
+
 
 ENTRIES: dict[tuple[str, ...], str] = {
     (): _ROOT,
@@ -127,4 +197,8 @@ ENTRIES: dict[tuple[str, ...], str] = {
     ("doctor",): _DOCTOR,
     ("cli",): _CLI,
     ("cli", "overview"): _CLI,
+    ("arm",): _ARM,
+    ("arm", "overview"): _ARM_OVERVIEW,
+    ("arm", "list"): _ARM_LIST,
+    ("arm", "show"): _ARM_SHOW,
 }

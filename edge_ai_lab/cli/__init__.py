@@ -62,6 +62,7 @@ def _argv_has_json(argv: list[str] | None) -> bool:
 
 
 def _build_parser() -> argparse.ArgumentParser:
+    from edge_ai_lab.cli._commands import arm as _arm_group
     from edge_ai_lab.cli._commands import cli as _cli_group
     from edge_ai_lab.cli._commands import doctor as _doctor_cmd
     from edge_ai_lab.cli._commands import explain as _explain_cmd
@@ -88,6 +89,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _overview_cmd.register(sub)
     _doctor_cmd.register(sub)
     _cli_group.register(sub)
+    _arm_group.register(sub)
     # Register your own noun groups here:
     #   from edge_ai_lab.cli._commands import my_noun as _my_noun_group
     #   _my_noun_group.register(sub)
