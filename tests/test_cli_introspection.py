@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -221,3 +222,55 @@ def test_stdlib_only_passes_when_clean(tmp_path: Path) -> None:
     (pkg / "mod.py").write_text("import json\n", encoding="utf-8")
     result = _check_stdlib_only(tmp_path)
     assert result["passed"] is True
+
+
+# --- doctor: no-secrets scans every byte, fails closed (qodo #15) -----------
+
+
+_LEAKED = "hf_abcdefghijklmnopqrstuvwxyz123456"
+
+
+def _setup_leaf(tmp_path: Path) -> Path:
+    leaf = tmp_path / "setup" / "spark" / "model" / "cfg"
+    leaf.mkdir(parents=True)
+    return leaf
+
+
+def test_no_secrets_catches_token_past_the_old_size_bound(tmp_path: Path) -> None:
+    """A 2 MiB file used to be skipped whole by the 1 MiB size bound."""
+    leaf = _setup_leaf(tmp_path)
+    (leaf / "big.log").write_bytes(b"x" * (2 * 1024 * 1024) + f"\ntoken={_LEAKED}\n".encode())
+    result = _check_no_secrets(tmp_path)
+    assert result["passed"] is False
+    assert "big.log" in result["message"]
+
+
+def test_no_secrets_catches_token_in_non_utf8_file(tmp_path: Path) -> None:
+    """A latin-1 file used to be skipped as an undecodable 'binary'."""
+    leaf = _setup_leaf(tmp_path)
+    (leaf / "notes.txt").write_bytes("café\n".encode("latin-1") + f"token={_LEAKED}\n".encode())
+    result = _check_no_secrets(tmp_path)
+    assert result["passed"] is False
+    assert "notes.txt" in result["message"]
+
+
+def test_no_secrets_reports_byte_offset_for_a_newline_free_blob(tmp_path: Path) -> None:
+    leaf = _setup_leaf(tmp_path)
+    (leaf / "blob.bin").write_bytes(b"\x00\x01" * 8 + f"token={_LEAKED}".encode())
+    result = _check_no_secrets(tmp_path)
+    assert result["passed"] is False
+    assert "blob.bin:@" in result["message"]
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can read a chmod-000 file")
+def test_no_secrets_fails_closed_on_an_unreadable_file(tmp_path: Path) -> None:
+    leaf = _setup_leaf(tmp_path)
+    locked = leaf / "locked.env"
+    locked.write_text("nothing here\n", encoding="utf-8")
+    locked.chmod(0o000)
+    try:
+        result = _check_no_secrets(tmp_path)
+        assert result["passed"] is False
+        assert "could not scan" in result["message"]
+    finally:
+        locked.chmod(0o600)
