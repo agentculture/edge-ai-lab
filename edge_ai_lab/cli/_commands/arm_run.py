@@ -48,7 +48,6 @@ import shlex
 import shutil
 import signal
 import subprocess  # nosec B404 - fixed manifest-pinned/declared argv, never shell=True
-import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -66,6 +65,7 @@ _GATEWAY_TIMEOUT = 5
 _LOG_CAP_LINES = 50
 _DEVFREQ_GPU = Path("/sys/class/devfreq/17000000.gpu")
 _THERMAL_ROOT = Path("/sys/class/thermal")
+_EMPTY = "(empty)"
 
 
 # --- deploy dir / marker -----------------------------------------------------
@@ -133,7 +133,7 @@ def _write_marker(marker_path: Path, arm_path: Path) -> None:
 def _remove_marker(marker_path: Path) -> None:
     try:
         marker_path.unlink()
-    except (FileNotFoundError, OSError):
+    except OSError:
         pass
 
 
@@ -154,7 +154,7 @@ def _run_capture(argv: list[str]) -> str:
         output = (output + (proc.stderr or "")).strip()
         if not output:
             return f"unavailable (exit {proc.returncode})"
-    return output.strip() or "(empty)"
+    return output.strip() or _EMPTY
 
 
 def _read_sysfs(path: Path) -> str | None:
@@ -302,8 +302,8 @@ def _render_launch(results: list[dict[str, Any]], dry_run: bool) -> str:
                 argv=shlex.join(step["argv"]),
                 exit_code=step["exit_code"],
                 n=_LOG_CAP_LINES,
-                stdout=_cap_lines(step["stdout"]) or "(empty)",
-                stderr=_cap_lines(step["stderr"]) or "(empty)",
+                stdout=_cap_lines(step["stdout"]) or _EMPTY,
+                stderr=_cap_lines(step["stderr"]) or _EMPTY,
             )
         )
     return "\n\n".join(blocks)
@@ -320,7 +320,7 @@ def _probe_gateway(gateway_url: str) -> tuple[int | None, str | None]:
             req, timeout=_GATEWAY_TIMEOUT
         ) as resp:  # nosec B310 - fixed http(s) gateway_url from the arm manifest, GET only
             return resp.status, None
-    except (urllib.error.URLError, OSError, ValueError) as exc:
+    except (OSError, ValueError) as exc:
         return None, str(exc)
 
 
