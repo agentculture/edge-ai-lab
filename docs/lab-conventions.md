@@ -54,7 +54,7 @@ line 302): Orin on JetPack 6 builds for `[87]`, JetPack 7 tegra for
 |---|---|---|
 | `arm.toml` | yes | the manifest (section 2) |
 | `README.md` | yes | the arm's own page: what it is, why we wanted it, rollback (section 6), build footprint (section 7), pins (section 5), status marker (section 3) |
-| `Dockerfile` | yes | the image the arm runs; its header records the build chain (section 5) |
+| `Dockerfile` | `sparkrun-recipe` arms: yes; `lobes-override` arms: conditional (see below) | the image the arm runs; its header records the build chain (section 5) |
 | `recipe.yaml` | Spark arms | a sparkrun `recipe_version: "2"` recipe; `container:` names the lab-built image |
 | `profile-override.toml` | Jetson arms | a lobes-cli card profile or shape override using only the twelve `RoleProfile` knobs listed in `../lobes-cli/lobes/profiles/schema.py` (`KNOB_NAMES`, line 81); an unknown knob is a load error there, not a warning |
 | `results/` | after a run | the `sparkrun_benchmark` YAML (Spark) or exported measurements; the raw transcript itself lives under `docs/evidence/` (section 3) |
@@ -63,6 +63,15 @@ Keep the arm definition (recipe or override) next to its transcript so a
 result is reproducible without re-deriving flags — the same rule
 `../lobes-cli/docs/evidence/README-dspark-arms.md` applies to its
 `arm-*.json` files.
+
+**`Dockerfile` requirement.** A `Dockerfile` is **required** for
+`sparkrun-recipe` arms — the image a sparkrun recipe names must be the arm's
+own build. For `lobes-override` arms it is **optional**: an override arm may
+omit it when `[pins].image_digest` (section 2) is a `sha256:` digest quoted
+from `../lobes-cli/docs/image-ledger.md`, or when the README's `## Pins`
+section (section 5) explains why the digest is empty. `arm validate` (task
+t5) enforces this — a `lobes-override` arm with neither a `Dockerfile` nor a
+qualifying `image_digest`/explanation fails validation.
 
 ## 2. The `arm.toml` manifest
 
@@ -86,6 +95,25 @@ Fields:
 | `status` | `measured`, `declared-unvalidated`, `virtual-32gb-capacity-only` | the honesty marker; see section 3 |
 | `[pins]` | table | section 5 |
 | `transcripts` | list of paths under `docs/evidence/` | empty means `status` cannot be `measured` |
+
+**Closed vocabularies.** These three fields take only the listed values —
+anything else is a manifest error, not a warning:
+
+- `device_class` ∈ `spark`, `thor`, `orin-agx-64`, `orin-agx-32-virtual`,
+  `orin-nx-16`, `orin-nano-8` (section 1's table).
+- `engine` ∈ `vllm`, `llama.cpp`, `sglang` (lobes-cli's closed `ENGINES`
+  tuple).
+- `box` ∈ `spark`, `thor`, `orin`, `nano`, `nx` (section 3's evidence-name
+  suffix).
+
+**Path identity.** `device_class` must equal the first path segment under
+`setup/`, and `configuration` must equal the third. The second path segment
+is a lowercase slug of the model — it need not equal `model` verbatim, since
+`model` carries the full Hugging Face id (or `repo:QUANT` for a GGUF); the
+slug is a filesystem-safe abbreviation of it.
+
+**`transcripts` paths.** Every entry is a path relative to `docs/evidence/` —
+never an absolute path, and never containing `..`.
 
 A full example for a Spark arm:
 
@@ -128,6 +156,14 @@ docs/evidence/YYYY-MM-DD-<verb>-<subject>-<box>.txt
 - `box` is one of `spark`, `thor`, `orin`, `nx`, `nano` (lobes-cli uses the
   first three; the last two are this lab's additions for the Orin NX and
   Orin Nano).
+
+**The evidence sidecar.** `arm run` (task t6) writes a sidecar directory
+`docs/evidence/<transcript-stem>/` next to the transcript, holding verbatim
+copies of the arm's `arm.toml`, the driving `recipe.yaml` or
+`profile-override.toml`, and a `run.json` (argv, exit code, sparkrun
+version, and the lock path held for the run). The sidecar makes the
+transcript reproducible from the evidence tree alone, without cross-checking
+the arm directory's current (possibly since-changed) state.
 
 **What a transcript must record** — every rule below is from
 `../lobes-cli/docs/model-switch-playbook.md` (rule numbers) or
@@ -179,6 +215,11 @@ UNVALIDATED, and says so"):
   string it ships (lobes-cli puts the phrase in the summary itself, e.g.
   `../lobes-cli/lobes/profiles/builtin_shapes/orin-lobe.toml`).
 - Never back-fill a value a run did not capture.
+- **This provenance rule is about model/lane numbers** — tok/s, TTFT, memory
+  *of a model* — sourced from a published card or a measurement on a named
+  model and window. An environment fact (disk usage, free memory, what else
+  is running) is not a model/lane number; it cites the command, host and date
+  instead, as below.
 - **Virtual-32GB arms are capacity-only.** The `orin-agx-32-virtual` class
   runs on the 64GB board with the memory budget capped. It answers "does it
   fit"; it never answers "how fast" — NVIDIA's published AGX Orin
@@ -189,10 +230,13 @@ UNVALIDATED, and says so"):
   `capacity-only`, and any throughput block in the transcript is labelled
   "measured on 64GB hardware — not a 32GB figure".
 
-Observations, not benchmarks: on 2026-08-29 the Spark `spark-f8a9` had a
-307 GB Hugging Face cache and 14 GB of memory available with the fleet up
-(`du -sh ~/.cache/huggingface`, `free -g`). Those are the conditions the
-first arm was planned against, not results.
+**Environment observation (not a benchmark number):** on 2026-08-29, on
+`spark-f8a9`, `du -sh ~/.cache/huggingface` reported a 307 GB Hugging Face
+cache and `free -g` reported 14 GB of memory available with the fleet up.
+These are host-environment facts (disk and RAM), not model/lane performance
+numbers, so they carry their own provenance — the command, the host and the
+date — rather than a published-card or model-measurement citation. Those are
+the conditions the first arm was planned against, not results.
 
 ## 4. The shared-box budget rule
 
@@ -219,13 +263,23 @@ Every arm on a fleet box therefore:
    answer after the arm exits, and the transcript records the reply. The
    `docker ps` before/after pair from section 3 is the other half of that
    proof.
-5. **One arm per box at a time.** An arm run leaves a box-level marker (a
-   lock file in the deploy directory plus a Docker label — `lab arm run`,
-   task t6); a second run from any actor — another Claude session, the
+5. **One arm per box at a time.** The marker is box-wide, at
+   `/var/tmp/edge-ai-lab/arm.lock` (falling back to `~/.edge-ai-lab/arm.lock`
+   when `/var/tmp` is not writable, recorded as a warning in the transcript;
+   `$LAB_BOX_LOCK` overrides the path for tests). `arm run` (task t6) creates
+   it atomically; a second run from any actor — another Claude session, the
    colleague resident, an operator — must detect it and refuse with a hint
-   naming the running arm, and the marker is removed on every exit
-   including abnormal ones. Two arms on one box would contaminate each
-   other's numbers (the quiet-box rule in section 3).
+   naming the running arm. The marker is owner-checked on removal (an actor
+   only removes a marker it created) and is held until *after* the after-state
+   capture, the gateway probe (item 4) and the transcript are written — not
+   released the moment the launched process exits. A stale marker naming a
+   dead pid is *reported*, never auto-removed — clearing it is a human or
+   operator decision. `SIGTERM` sent to `arm run` is forwarded to the launched
+   process group, and `arm run` waits for it to exit before releasing the
+   marker. A launch that exits non-zero still gets its after-state capture,
+   gateway probe and transcript written; `arm run` then exits 2 (environment
+   error) rather than 0. Two arms on one box would contaminate each other's
+   numbers (the quiet-box rule in section 3).
 
 ## 5. Pins
 
@@ -245,6 +299,18 @@ The `Dockerfile` header states either the jetson-containers chain and env it
 was built with, or the upstream image digest it is `FROM`. Rebuilding an arm
 from its README alone on a clean box must yield the same image digest, or the
 README documents why it cannot (an upstream nightly, for instance) — spec h23.
+
+**README `## Pins` format.** `arm validate` reads the README's `## Pins`
+section as a bullet list, one line per pin:
+
+```markdown
+- image_digest: sha256:<64 hex> — ../lobes-cli/docs/image-ledger.md line 99
+```
+
+That is, `- key: value — source`. A Markdown table also satisfies the check,
+but only when the key cell itself contains no colon (a colon there is
+ambiguous between a table-cell separator and the `key: value` form) — when a
+key needs a colon, use the bullet form instead.
 
 ## 6. Rollback before the first run
 
@@ -290,7 +356,11 @@ of sparkrun make this a hard rule rather than hygiene:
 - Spark Arena uploads publish the recipe text and the run logs.
 
 `lab doctor` (task t8) scans `setup/` for token, password and private-host
-patterns and fails on a hit.
+patterns and fails on a hit. The same scan backs `arm validate`'s no-secrets
+check: it streams every file in the arm tree — every size, every encoding,
+including binaries — rather than skipping large or non-text files. A file
+the scan cannot read (permissions, a decode error) **fails the check**: the
+scan is fail-closed, never fail-open on an unreadable file.
 
 **Telemetry — decision recorded here:** sparkrun sends anonymous usage
 telemetry to `telemetry.sparkrun.dev` by default (sparkrun 0.3.6 `README.md`,
