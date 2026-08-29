@@ -34,14 +34,16 @@ _PLACEHOLDER_RE = re.compile(r"(?i)\b(tbd|todo)\b|\.\.\.|<fill")
 
 # Dockerfile provenance (§5): either a digest-pinned FROM, or the
 # jetson-containers chain + build-env header.
-_FROM_DIGEST_RE = re.compile(r"^FROM\s+\S+@sha256:[0-9a-fA-F]{64}\b", re.IGNORECASE)
-_JC_HEADER_RE = re.compile(r"#\s*jetson-containers:.*\b[0-9a-fA-F]{7,40}\b", re.IGNORECASE)
+_FROM_DIGEST_RE = re.compile(r"^FROM\s+\S+@sha256:[0-9a-f]{64}\b", re.IGNORECASE)
+_JC_HEADER_RE = re.compile(r"#\s*jetson-containers:.*\b[0-9a-f]{7,40}\b", re.IGNORECASE)
 _L4T_RE = re.compile(r"^#\s*L4T_VERSION=")
 _CUDA_VERSION_RE = re.compile(r"^#\s*CUDA_VERSION=")
 _CUDA_ARCH_RE = re.compile(r"^#\s*CUDA_ARCH=")
 _DOCKERFILE_SCAN_LINES = 30
 
 _MAX_SCAN_BYTES = 1024 * 1024  # same bound as doctor.py's no-secrets scan
+
+_README_NOT_FOUND = "README.md not found"
 
 
 def _pass(check_id: str, message: str) -> dict[str, object]:
@@ -106,7 +108,7 @@ def _manifest_contains(value: object, needle: str) -> bool:
 def _check_rollback(readme_text: str | None) -> dict[str, object]:
     check_id = "readme-rollback"
     if readme_text is None:
-        return _fail(check_id, "README.md not found")
+        return _fail(check_id, _README_NOT_FOUND)
     section = _find_section(readme_text, "Rollback")
     if section is None:
         return _fail(check_id, "README.md has no '## Rollback' section")
@@ -124,7 +126,7 @@ def _check_rollback(readme_text: str | None) -> dict[str, object]:
 def _check_build_footprint(readme_text: str | None) -> dict[str, object]:
     check_id = "readme-build-footprint"
     if readme_text is None:
-        return _fail(check_id, "README.md not found")
+        return _fail(check_id, _README_NOT_FOUND)
     section = _find_section(readme_text, "Build footprint")
     if section is None:
         return _fail(check_id, "README.md has no '## Build footprint' section")
@@ -142,10 +144,34 @@ def _check_build_footprint(readme_text: str | None) -> dict[str, object]:
     return _pass(check_id, "Build footprint has measured Build time/Disk delta/Retention")
 
 
+class _PinOutcome:
+    """Where one manifest pin landed when checked against the Pins section."""
+
+    OK = "ok"
+    MISSING = "missing"
+    UNEXPLAINED_EMPTY = "unexplained-empty"
+
+
+def _check_one_pin(section: str, key: str, value: object) -> str:
+    """Classify a single manifest pin's line in the README Pins section."""
+    line_match = re.search(rf"^.*\b{re.escape(str(key))}\b.*$", section, re.MULTILINE)
+    if line_match is None:
+        return _PinOutcome.MISSING
+    line = line_match.group(0)
+    after = line.split(":", 1)[1].strip() if ":" in line else ""
+    if value in ("", None):
+        if "empty" not in after.lower() and "n/a" not in after.lower():
+            return _PinOutcome.UNEXPLAINED_EMPTY
+        return _PinOutcome.OK
+    if not after or _PLACEHOLDER_RE.search(after):
+        return _PinOutcome.MISSING
+    return _PinOutcome.OK
+
+
 def _check_pins(readme_text: str | None, pins: dict[str, object]) -> dict[str, object]:
     check_id = "readme-pins"
     if readme_text is None:
-        return _fail(check_id, "README.md not found")
+        return _fail(check_id, _README_NOT_FOUND)
     section = _find_section(readme_text, "Pins")
     if section is None:
         return _fail(check_id, "README.md has no '## Pins' section")
@@ -153,18 +179,11 @@ def _check_pins(readme_text: str | None, pins: dict[str, object]) -> dict[str, o
     missing: list[str] = []
     unexplained_empty: list[str] = []
     for key, value in pins.items():
-        line_match = re.search(rf"^.*\b{re.escape(str(key))}\b.*$", section, re.MULTILINE)
-        if line_match is None:
+        outcome = _check_one_pin(section, key, value)
+        if outcome == _PinOutcome.MISSING:
             missing.append(key)
-            continue
-        line = line_match.group(0)
-        after = line.split(":", 1)[1].strip() if ":" in line else ""
-        if value in ("", None):
-            if "empty" not in after.lower() and "n/a" not in after.lower():
-                unexplained_empty.append(key)
-        else:
-            if not after or _PLACEHOLDER_RE.search(after):
-                missing.append(key)
+        elif outcome == _PinOutcome.UNEXPLAINED_EMPTY:
+            unexplained_empty.append(key)
 
     problems = []
     if missing:
@@ -178,6 +197,40 @@ def _check_pins(readme_text: str | None, pins: dict[str, object]) -> dict[str, o
     return _pass(check_id, "Pins section lists every manifest pin")
 
 
+def _check_measured(check_id: str, data: dict[str, object], root: Path) -> dict[str, object]:
+    transcripts = data["transcripts"]
+    assert isinstance(transcripts, list)
+    if not transcripts:
+        return _fail(check_id, "status is 'measured' but transcripts is empty")
+    broken = []
+    for rel in transcripts:
+        p = root / str(rel)
+        if not p.is_file() or p.stat().st_size == 0:
+            broken.append(str(rel))
+    if broken:
+        return _fail(check_id, "transcript path(s) missing or empty: " + ", ".join(broken))
+    return _pass(check_id, "every transcript exists on disk and is non-empty")
+
+
+def _check_declared(check_id: str, text: str) -> dict[str, object]:
+    if "DECLARED, UNVALIDATED" not in text:
+        return _fail(check_id, "README.md is missing the literal 'DECLARED, UNVALIDATED' marker")
+    return _pass(check_id, "README carries the DECLARED, UNVALIDATED marker")
+
+
+def _check_virtual32(check_id: str, data: dict[str, object], text: str) -> dict[str, object]:
+    problems = []
+    if "capacity-only" not in text:
+        problems.append("README.md is missing the literal 'capacity-only'")
+    if "measured on 64GB hardware" not in text:
+        problems.append("README.md is missing the literal 'measured on 64GB hardware'")
+    if not _manifest_contains(data, "capacity-only"):
+        problems.append("manifest is missing the literal 'capacity-only'")
+    if problems:
+        return _fail(check_id, "; ".join(problems))
+    return _pass(check_id, "virtual-32gb-capacity-only markers present in README and manifest")
+
+
 def _check_status_marker(
     data: dict[str, object], readme_text: str | None, root: Path
 ) -> dict[str, object]:
@@ -186,38 +239,11 @@ def _check_status_marker(
     status = data["status"]
 
     if status == "measured":
-        transcripts = data["transcripts"]
-        assert isinstance(transcripts, list)
-        if not transcripts:
-            return _fail(check_id, "status is 'measured' but transcripts is empty")
-        broken = []
-        for rel in transcripts:
-            p = root / str(rel)
-            if not p.is_file() or p.stat().st_size == 0:
-                broken.append(str(rel))
-        if broken:
-            return _fail(check_id, "transcript path(s) missing or empty: " + ", ".join(broken))
-        return _pass(check_id, "every transcript exists on disk and is non-empty")
-
+        return _check_measured(check_id, data, root)
     if status == "declared-unvalidated":
-        if "DECLARED, UNVALIDATED" not in text:
-            return _fail(
-                check_id, "README.md is missing the literal 'DECLARED, UNVALIDATED' marker"
-            )
-        return _pass(check_id, "README carries the DECLARED, UNVALIDATED marker")
-
+        return _check_declared(check_id, text)
     if status == "virtual-32gb-capacity-only":
-        problems = []
-        if "capacity-only" not in text:
-            problems.append("README.md is missing the literal 'capacity-only'")
-        if "measured on 64GB hardware" not in text:
-            problems.append("README.md is missing the literal 'measured on 64GB hardware'")
-        if not _manifest_contains(data, "capacity-only"):
-            problems.append("manifest is missing the literal 'capacity-only'")
-        if problems:
-            return _fail(check_id, "; ".join(problems))
-        return _pass(check_id, "virtual-32gb-capacity-only markers present in README and manifest")
-
+        return _check_virtual32(check_id, data, text)
     return _fail(check_id, f"unknown status '{status}'")
 
 
